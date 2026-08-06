@@ -1,0 +1,95 @@
+:root {
+  --paper: #f6f0e2;
+  --paper-2: #efe6d0;
+  --paper-3: #e6dabd;
+  --ink: #161d33;
+  --ink-soft: #52503f;
+  --ink-faint: #837d63;
+  --crimson: #9c1f34;
+  --crimson-dark: #711726;
+  --crimson-bg: rgba(156, 31, 52, 0.08);
+  --gold: #a97c2f;
+  --gold-light: #d7ad5f;
+  --gold-bg: rgba(169, 124, 47, 0.12);
+  --navy: #161d33;
+  --navy-2: #202a4a;
+  --line: rgba(22, 29, 51, 0.16);
+  --line-strong: rgba(22, 29, 51, 0.32);
+  --shadow: 0 24px 48px -20px rgba(22, 15, 5, 0.35);
+  --shadow-soft: 0 10px 24px -12px rgba(22, 15, 5, 0.25);
+
+  /* fixed tokens for surfaces that stay dark in both themes (e.g. the navy CTA panel) */
+  --on-dark: #f7f1e2;
+  --on-dark-soft: rgba(247, 241, 226, 0.75);
+
+  --display: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', serif;
+  --sans: 'Archivo', 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  font: 17px/1.6 var(--sans);
+  color-scheme: light dark;
+  color: var(--ink-soft);
+  background: var(--paper);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #12131c;
+    --paper-2: #191b28;
+    --paper-3: #232537;
+    --ink: #f3ecd9;
+    --ink-soft: #cdc6b4;
+    --ink-faint: #8b8676;
+    --crimson: #d9536a;
+    --crimson-dark: #b23a4f;
+    --crimson-bg: rgba(217, 83, 106, 0.12);
+    --gold: #d7ad5f;
+    --gold-light: #e9cd8f;
+    --gold-bg: rgba(215, 173, 95, 0.14);
+    --navy: #0d101c;
+    --navy-2: #171a2b;
+    --line: rgba(243, 236, 217, 0.14);
+    --line-strong: rgba(243, 236, 217, 0.28);
+    --shadow: 0 24px 48px -20px rgba(0, 0, 0, 0.6);
+    --shadow-soft: 0 10px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  font-weight: 560;
+  color: var(--ink);
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+::selection {
+  background: var(--crimson);
+  color: var(--paper);
+}
