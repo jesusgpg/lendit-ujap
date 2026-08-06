@@ -4,6 +4,7 @@ import { getAppName, getAppTagline, getItemCategories } from '../definitions'
 const appName = getAppName()
 const tagline = getAppTagline()
 const categories = getItemCategories()
+const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
 
 const categoryMeta: Record<string, { icon: string; blurb: string }> = {
   calculadoras: {
@@ -58,7 +59,7 @@ const trustPoints = [
   <div class="page">
     <header class="site-header">
       <a class="brand" href="#top">
-        <img class="brand__crest" src="/images/Logo-UJAP1.png" alt="Escudo Universidad José Antonio Páez" />
+        <img class="brand__crest" :src="crestSrc" alt="Escudo Universidad José Antonio Páez" />
         <span class="brand__name">{{ appName }}</span>
       </a>
       <nav class="site-nav">
@@ -101,7 +102,7 @@ const trustPoints = [
         <div class="hero__art" aria-hidden="true">
           <div class="medallion">
             <div class="medallion__ring"></div>
-            <img class="medallion__crest" src="/images/Logo-UJAP1.png" alt="" />
+            <img class="medallion__crest" :src="crestSrc" alt="" />
           </div>
 
           <article class="loan-card loan-card--front">
@@ -194,7 +195,7 @@ const trustPoints = [
 
     <footer class="site-footer">
       <div class="brand brand--footer">
-        <img class="brand__crest" src="/images/Logo-UJAP1.png" alt="Escudo Universidad José Antonio Páez" />
+        <img class="brand__crest" :src="crestSrc" alt="Escudo Universidad José Antonio Páez" />
         <div>
           <span class="brand__name">{{ appName }}</span>
           <p>Hecho por estudiantes, para estudiantes de la UJAP.</p>
