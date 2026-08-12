@@ -1,24 +1,69 @@
 <script setup lang="ts">
-import { getAppName, getAppTagline, getItemCategories } from '../definitions'
+import { ref } from 'vue'
+import { getAppName, getAppTagline, getArticles, getCategories } from '../definitions'
+import ArticleCard from '../components/ArticleCard.vue'
+import CategoryCard from '../components/CategoryCard.vue'
+import StepCard from '../components/StepCard.vue'
 
 const appName = getAppName()
 const tagline = getAppTagline()
-const categories = getItemCategories()
+const articles = ref(getArticles())
+const fullCategories = ref(getCategories())
 const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
 
-const categoryMeta: Record<string, { icon: string; blurb: string }> = {
-  calculadoras: {
-    icon: '⌗',
-    blurb: 'Financiera, científica o de ingeniería para ese parcial de última hora.',
-  },
-  cargadores: {
-    icon: '⚡',
-    blurb: 'Cables y adaptadores para no quedarte sin batería entre clase y clase.',
-  },
-  equipo: {
-    icon: '◈',
-    blurb: 'Audífonos, mouse, trípodes y demás herramientas de laboratorio o taller.',
-  },
+// Estado reactivo para notificaciones y pasos
+const notification = ref<{ message: string; type: 'success' | 'info' } | null>(null)
+const completedSteps = ref<Record<string, boolean>>({})
+
+// Manejo de eventos (Emits)
+const handleRequest = (articleId: string) => {
+  const article = articles.value.find((a) => a.id === articleId)
+  if (article) {
+    if (article.status === 'available') {
+      notification.value = {
+        message: `¡Has solicitado el préstamo de: ${article.title}! Revisa tu buzón UJAP.`,
+        type: 'success',
+      }
+    } else {
+      notification.value = {
+        message: `Has preguntado por la disponibilidad de: ${article.title}. Te avisaremos si se libera.`,
+        type: 'info',
+      }
+    }
+    // Auto-ocultar notificación
+    setTimeout(() => {
+      if (notification.value?.message.includes(article.title)) {
+        notification.value = null
+      }
+    }, 5000)
+  }
+}
+
+const handleSelectCategory = (categoryId: string) => {
+  if (categoryId === 'more') {
+    notification.value = {
+      message: '¿Tienes algo diferente que prestar? ¡Regístralo en LendIt!',
+      type: 'info',
+    }
+  } else {
+    const cat = fullCategories.value.find((c) => c.id === categoryId)
+    if (cat) {
+      notification.value = {
+        message: `Explorando la categoría: ${cat.label}`,
+        type: 'info',
+      }
+    }
+  }
+}
+
+const handleCompleteStep = (stepNum: string) => {
+  completedSteps.value[stepNum] = !completedSteps.value[stepNum]
+  if (completedSteps.value[stepNum]) {
+    notification.value = {
+      message: `¡Paso ${stepNum} marcado como leído!`,
+      type: 'success',
+    }
+  }
 }
 
 const steps = [
@@ -57,6 +102,17 @@ const trustPoints = [
 
 <template>
   <div class="page">
+    <!-- Banner de notificaciones premium -->
+    <Transition name="slide-down">
+      <div v-if="notification" class="notification-banner" :class="`notification-banner--${notification.type}`">
+        <span class="notification-banner__icon">
+          {{ notification.type === 'success' ? '✓' : 'ℹ' }}
+        </span>
+        <span class="notification-banner__text">{{ notification.message }}</span>
+        <button class="notification-banner__close" @click="notification = null">×</button>
+      </div>
+    </Transition>
+
     <header class="site-header">
       <a class="brand" href="#top">
         <img class="brand__crest" :src="crestSrc" alt="Escudo Universidad José Antonio Páez" />
@@ -105,34 +161,26 @@ const trustPoints = [
             <img class="medallion__crest" :src="crestSrc" alt="" />
           </div>
 
-          <article class="loan-card loan-card--front">
-            <header>
-              <span class="loan-card__tag">EN PRÉSTAMO</span>
-              <span class="loan-card__code">#UJAP-0142</span>
-            </header>
-            <h3>Calculadora HP 50g</h3>
-            <p class="loan-card__meta">Ingeniería · 2 días</p>
-            <footer>
-              <span>Devuelve</span>
-              <strong>Vie · 4:00 pm</strong>
-            </footer>
-          </article>
+          <ArticleCard
+            v-if="articles[0]"
+            :article="articles[0]"
+            class="loan-card--front"
+            @request="handleRequest"
+          />
 
-          <article class="loan-card loan-card--back">
-            <header>
-              <span class="loan-card__tag loan-card__tag--gold">DISPONIBLE</span>
-              <span class="loan-card__code">#UJAP-0098</span>
-            </header>
-            <h3>Cargador USB-C 65W</h3>
-            <p class="loan-card__meta">Derecho · 4 horas</p>
-          </article>
+          <ArticleCard
+            v-if="articles[1]"
+            :article="articles[1]"
+            class="loan-card--back"
+            @request="handleRequest"
+          />
         </div>
       </section>
 
       <div class="ticker" role="presentation">
         <div class="ticker__track">
           <span v-for="i in 2" :key="i" class="ticker__group">
-            <span v-for="category in categories" :key="category.id + i" class="ticker__item">
+            <span v-for="category in fullCategories" :key="category.id + i" class="ticker__item">
               {{ category.label }}
             </span>
           </span>
@@ -143,11 +191,13 @@ const trustPoints = [
         <p class="section__eyebrow">Cómo funciona</p>
         <h2 class="section__title">Del anuncio a la devolución, en tres pasos</h2>
         <ol class="steps__list">
-          <li v-for="step in steps" :key="step.n" class="step">
-            <span class="step__seal">{{ step.n }}</span>
-            <h3>{{ step.title }}</h3>
-            <p>{{ step.text }}</p>
-          </li>
+          <StepCard
+            v-for="step in steps"
+            :key="step.n"
+            :step="step"
+            :is-completed="!!completedSteps[step.n]"
+            @complete="handleCompleteStep"
+          />
         </ol>
       </section>
 
@@ -155,16 +205,16 @@ const trustPoints = [
         <p class="section__eyebrow">Qué puedes prestar</p>
         <h2 class="section__title">Empieza por lo que ya tienes a la mano</h2>
         <ul class="categories__grid">
-          <li v-for="category in categories" :key="category.id" class="category-card">
-            <span class="category-card__icon">{{ categoryMeta[category.id]?.icon ?? '◆' }}</span>
-            <h3>{{ category.label }}</h3>
-            <p>{{ categoryMeta[category.id]?.blurb }}</p>
-          </li>
-          <li class="category-card category-card--more">
-            <span class="category-card__icon">+</span>
-            <h3>Y lo que falte</h3>
-            <p>Libros, batas de laboratorio, instrumentos… si es tuyo y se puede prestar, tiene un lugar aquí.</p>
-          </li>
+          <CategoryCard
+            v-for="category in fullCategories"
+            :key="category.id"
+            :category="category"
+            @select="handleSelectCategory"
+          />
+          <CategoryCard
+            :is-placeholder="true"
+            @select="handleSelectCategory"
+          />
         </ul>
       </section>
 
@@ -456,17 +506,8 @@ const trustPoints = [
   object-fit: contain;
 }
 
-.loan-card {
-  position: absolute;
-  width: 268px;
-  padding: 22px 22px 20px;
-  border-radius: 16px;
-  background: var(--paper-2);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-}
-
 .loan-card--front {
+  position: absolute;
   top: 195px;
   left: 0;
   transform: rotate(-4deg);
@@ -475,67 +516,13 @@ const trustPoints = [
 }
 
 .loan-card--back {
+  position: absolute;
   top: 305px;
   left: 130px;
   transform: rotate(5deg);
   z-index: 1;
   background: var(--paper-3);
   animation: card-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both;
-}
-
-.loan-card header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.loan-card__tag {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--crimson-dark);
-  background: var(--crimson-bg);
-  padding: 4px 8px;
-  border-radius: 5px;
-}
-
-.loan-card__tag--gold {
-  color: var(--gold);
-  background: var(--gold-bg);
-}
-
-.loan-card__code {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--ink-faint);
-}
-
-.loan-card h3 {
-  font-size: 19px;
-  font-weight: 560;
-}
-
-.loan-card__meta {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--ink-faint);
-}
-
-.loan-card footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--line-strong);
-  font-size: 12.5px;
-  color: var(--ink-faint);
-}
-
-.loan-card footer strong {
-  font-family: var(--mono);
-  color: var(--ink);
 }
 
 /* ---------- ticker ---------- */
@@ -614,36 +601,7 @@ const trustPoints = [
   }
 }
 
-.step {
-  position: relative;
-  padding-top: 8px;
-}
 
-.step__seal {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: 1.5px solid var(--gold-light);
-  font-family: var(--display);
-  font-weight: 650;
-  font-size: 16px;
-  color: var(--gold);
-  margin-bottom: 20px;
-}
-
-.step h3 {
-  font-size: 20px;
-  margin-bottom: 8px;
-}
-
-.step p {
-  font-size: 15px;
-  color: var(--ink-soft);
-  max-width: 32ch;
-}
 
 /* ---------- categories ---------- */
 .categories__grid {
@@ -667,56 +625,7 @@ const trustPoints = [
   }
 }
 
-.category-card {
-  padding: 28px 24px;
-  border-radius: 18px;
-  background: var(--paper-2);
-  border: 1px solid var(--line);
-  transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease,
-    border-color 0.25s ease;
-}
 
-.category-card:hover {
-  transform: translateY(-6px);
-  box-shadow: var(--shadow-soft);
-  border-color: var(--gold-light);
-}
-
-.category-card__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--crimson-bg);
-  color: var(--crimson-dark);
-  font-size: 19px;
-  margin-bottom: 20px;
-}
-
-.category-card--more {
-  background: transparent;
-  border-style: dashed;
-}
-
-.category-card--more .category-card__icon {
-  background: var(--gold-bg);
-  color: var(--gold);
-}
-
-.category-card h3 {
-  font-size: 18px;
-  margin-bottom: 8px;
-}
-
-.category-card p {
-  font-size: 14px;
-  color: var(--ink-faint);
-  line-height: 1.55;
-}
 
 /* ---------- trust ---------- */
 .trust {
@@ -901,5 +810,96 @@ const trustPoints = [
   .ticker__track {
     animation: none !important;
   }
+}
+
+/* ---------- notification banner ---------- */
+.notification-banner {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper-2) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid var(--line);
+  box-shadow: var(--shadow-soft);
+  min-width: 320px;
+  max-width: 90vw;
+  box-sizing: border-box;
+}
+
+.notification-banner--success {
+  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
+}
+
+.notification-banner--success .notification-banner__icon {
+  color: var(--navy);
+  background: var(--gold);
+}
+
+.notification-banner--info {
+  border-color: color-mix(in srgb, var(--crimson) 50%, transparent);
+}
+
+.notification-banner--info .notification-banner__icon {
+  color: #fbf3e6;
+  background: var(--crimson);
+}
+
+.notification-banner__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notification-banner__text {
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--ink);
+  margin: 0;
+  flex: 1;
+}
+
+.notification-banner__close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.notification-banner__close:hover {
+  color: var(--ink);
+}
+
+/* Animations for Transition */
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.slide-down-enter-from {
+  opacity: 0;
+  transform: translate(-50%, -30px);
+}
+
+.slide-down-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -30px);
 }
 </style>

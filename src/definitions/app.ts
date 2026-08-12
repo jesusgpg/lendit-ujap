@@ -18,3 +18,77 @@ export function getItemCategories(): ItemCategory[] {
     { id: 'equipo', label: 'Equipo' },
   ]
 }
+
+export interface Article {
+  id: string
+  code: string
+  title: string
+  category: string
+  duration: string
+  status: 'available' | 'lent'
+  returnTime?: string
+}
+
+export interface Category {
+  id: string
+  label: string
+  icon: string
+  blurb: string
+}
+
+export interface Step {
+  n: string
+  title: string
+  text: string
+}
+
+export interface TrustPoint {
+  title: string
+  text: string
+}
+
+export function getArticles(): Article[] {
+  return [
+    {
+      id: 'article-1',
+      code: '#UJAP-0142',
+      title: 'Calculadora HP 50g',
+      category: 'Ingeniería',
+      duration: '2 días',
+      status: 'lent',
+      returnTime: 'Vie · 4:00 pm',
+    },
+    {
+      id: 'article-2',
+      code: '#UJAP-0098',
+      title: 'Cargador USB-C 65W',
+      category: 'Derecho',
+      duration: '4 horas',
+      status: 'available',
+    },
+  ]
+}
+
+export function getCategories(): Category[] {
+  return [
+    {
+      id: 'calculadoras',
+      label: 'Calculadoras',
+      icon: '⌗',
+      blurb: 'Financiera, científica o de ingeniería para ese parcial de última hora.',
+    },
+    {
+      id: 'cargadores',
+      label: 'Cargadores',
+      icon: '⚡',
+      blurb: 'Cables y adaptadores para no quedarte sin batería entre clase y clase.',
+    },
+    {
+      id: 'equipo',
+      label: 'Equipo',
+      icon: '◈',
+      blurb: 'Audífonos, mouse, trípodes y demás herramientas de laboratorio o taller.',
+    },
+  ]
+}
+
