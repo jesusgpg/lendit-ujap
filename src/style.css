@@ -93,3 +93,59 @@ img {
   background: var(--crimson);
   color: var(--paper);
 }
+
+/* ---------- buttons (shared across views/components) ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 24px;
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.btn--small {
+  padding: 9px 18px;
+  font-size: 13.5px;
+}
+
+.btn--primary {
+  background: var(--crimson);
+  color: #fbf3e6;
+  box-shadow: var(--shadow-soft);
+}
+
+.btn--primary:hover {
+  transform: translateY(-2px);
+  background: var(--crimson-dark);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.btn--ghost:hover {
+  border-color: var(--crimson);
+  color: var(--crimson);
+}
+
+.btn--paper {
+  background: var(--on-dark);
+  color: var(--crimson-dark);
+}
+
+.btn--paper:hover {
+  transform: translateY(-2px);
+}

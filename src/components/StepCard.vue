@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Step } from '../definitions'
+import type { Step } from '../types'
 
 defineProps<{
   step: Step
