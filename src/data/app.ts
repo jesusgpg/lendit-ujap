@@ -1,3 +1,5 @@
+import type { Article, Category, ItemCategory } from '../types'
+
 export function getAppName(): string {
   return 'LendIt UJAP'
 }
@@ -6,45 +8,12 @@ export function getAppTagline(): string {
   return 'Como Airbnb, pero para prestar cosas entre estudiantes por tiempo limitado.'
 }
 
-export interface ItemCategory {
-  id: string
-  label: string
-}
-
 export function getItemCategories(): ItemCategory[] {
   return [
     { id: 'calculadoras', label: 'Calculadoras' },
     { id: 'cargadores', label: 'Cargadores' },
     { id: 'equipo', label: 'Equipo' },
   ]
-}
-
-export interface Article {
-  id: string
-  code: string
-  title: string
-  category: string
-  duration: string
-  status: 'available' | 'lent'
-  returnTime?: string
-}
-
-export interface Category {
-  id: string
-  label: string
-  icon: string
-  blurb: string
-}
-
-export interface Step {
-  n: string
-  title: string
-  text: string
-}
-
-export interface TrustPoint {
-  title: string
-  text: string
 }
 
 export function getArticles(): Article[] {
@@ -91,4 +60,3 @@ export function getCategories(): Category[] {
     },
   ]
 }
-

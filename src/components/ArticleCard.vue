@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Article } from '../definitions'
+import type { Article } from '../types'
 
 defineProps<{
   article: Article

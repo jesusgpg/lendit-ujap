@@ -1,19 +1,69 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { getAppName, getAppTagline, getArticles, getCategories } from '../definitions'
+import { computed, ref } from 'vue'
+import { getAppName, getAppTagline, getCategories } from '../data'
+import { useAuthStore } from '../stores/auth'
+import { useArticlesStore } from '../stores/articles'
 import ArticleCard from '../components/ArticleCard.vue'
 import CategoryCard from '../components/CategoryCard.vue'
 import StepCard from '../components/StepCard.vue'
+import ModalDialog from '../components/ModalDialog.vue'
+import LoginForm from '../components/LoginForm.vue'
+import PublishArticleForm from '../components/PublishArticleForm.vue'
 
 const appName = getAppName()
 const tagline = getAppTagline()
-const articles = ref(getArticles())
 const fullCategories = ref(getCategories())
 const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
+
+const authStore = useAuthStore()
+const articlesStore = useArticlesStore()
+const articles = computed(() => articlesStore.articles)
 
 // Estado reactivo para notificaciones y pasos
 const notification = ref<{ message: string; type: 'success' | 'info' } | null>(null)
 const completedSteps = ref<Record<string, boolean>>({})
+
+// Estado reactivo de los modales de autenticación / publicación
+const activeModal = ref<'login' | 'publish' | null>(null)
+const pendingPublishAfterLogin = ref(false)
+
+function openLogin(thenOpenPublish = false) {
+  pendingPublishAfterLogin.value = thenOpenPublish
+  activeModal.value = 'login'
+}
+
+function openPublish() {
+  if (!authStore.isAuthenticated) {
+    openLogin(true)
+    return
+  }
+  activeModal.value = 'publish'
+}
+
+function closeModal() {
+  activeModal.value = null
+  pendingPublishAfterLogin.value = false
+}
+
+function handleLoginSuccess() {
+  notification.value = { message: `¡Bienvenido/a, ${authStore.user?.name}!`, type: 'success' }
+  if (pendingPublishAfterLogin.value) {
+    pendingPublishAfterLogin.value = false
+    activeModal.value = 'publish'
+  } else {
+    closeModal()
+  }
+}
+
+function handleArticlePublished() {
+  notification.value = { message: '¡Tu objeto ya está publicado en LendIt!', type: 'success' }
+  closeModal()
+}
+
+function handleLogout() {
+  authStore.logout()
+  notification.value = { message: 'Sesión cerrada.', type: 'info' }
+}
 
 // Manejo de eventos (Emits)
 const handleRequest = (articleId: string) => {
@@ -123,7 +173,11 @@ const trustPoints = [
         <a href="#categorias">Categorías</a>
         <a href="#confianza">Confianza</a>
       </nav>
-      <a class="btn btn--primary btn--small" href="#unirme">Empezar</a>
+      <div v-if="authStore.isAuthenticated" class="site-header__user">
+        <span>Hola, {{ authStore.user?.name }}</span>
+        <button class="btn btn--ghost btn--small" type="button" @click="handleLogout">Salir</button>
+      </div>
+      <button v-else class="btn btn--primary btn--small" type="button" @click="openLogin()">Empezar</button>
     </header>
 
     <main id="top">
@@ -136,7 +190,7 @@ const trustPoints = [
           </h1>
           <p class="hero__tagline">{{ tagline }}</p>
           <div class="hero__actions">
-            <a class="btn btn--primary" href="#unirme">Publicar un objeto</a>
+            <button class="btn btn--primary" type="button" @click="openPublish">Publicar un objeto</button>
             <a class="btn btn--ghost" href="#categorias">Ver categorías</a>
           </div>
           <dl class="hero__stats">
@@ -239,7 +293,9 @@ const trustPoints = [
         <div class="cta__seal">LU</div>
         <h2>Tu próximo favor está a un préstamo de distancia</h2>
         <p>Únete con tu correo institucional y ten tu primer objeto publicado en menos de cinco minutos.</p>
-        <a class="btn btn--paper" href="#top">Crear mi cuenta UJAP</a>
+        <button v-if="!authStore.isAuthenticated" class="btn btn--paper" type="button" @click="openLogin()">
+          Crear mi cuenta UJAP
+        </button>
       </section>
     </main>
 
@@ -253,6 +309,14 @@ const trustPoints = [
       </div>
       <p class="site-footer__note">© {{ new Date().getFullYear() }} {{ appName }} · San Diego, Carabobo</p>
     </footer>
+
+    <ModalDialog v-if="activeModal === 'login'" title="Inicia sesión" @close="closeModal">
+      <LoginForm @success="handleLoginSuccess" />
+    </ModalDialog>
+
+    <ModalDialog v-if="activeModal === 'publish'" title="Publicar un objeto" @close="closeModal">
+      <PublishArticleForm @published="handleArticlePublished" />
+    </ModalDialog>
   </div>
 </template>
 
@@ -301,6 +365,15 @@ const trustPoints = [
   letter-spacing: -0.2px;
 }
 
+.site-header__user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
 .site-nav {
   display: flex;
   gap: 28px;
@@ -325,60 +398,6 @@ const trustPoints = [
   }
 }
 
-/* ---------- buttons ---------- */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 13px 24px;
-  border-radius: 999px;
-  font-family: var(--sans);
-  font-weight: 600;
-  font-size: 15px;
-  text-decoration: none;
-  border: 1.5px solid transparent;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
-}
-
-.btn--small {
-  padding: 9px 18px;
-  font-size: 13.5px;
-}
-
-.btn--primary {
-  background: var(--crimson);
-  color: #fbf3e6;
-  box-shadow: var(--shadow-soft);
-}
-
-.btn--primary:hover {
-  transform: translateY(-2px);
-  background: var(--crimson-dark);
-}
-
-.btn--ghost {
-  background: transparent;
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
-
-.btn--ghost:hover {
-  border-color: var(--crimson);
-  color: var(--crimson);
-}
-
-.btn--paper {
-  background: var(--on-dark);
-  color: var(--crimson-dark);
-}
-
-.btn--paper:hover {
-  transform: translateY(-2px);
-}
 
 /* ---------- hero ---------- */
 .hero {

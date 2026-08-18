@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Category } from '../definitions'
+import type { Category } from '../types'
 
 defineProps<{
   category?: Category

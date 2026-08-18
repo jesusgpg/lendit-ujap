@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getAppName, getAppTagline, getItemCategories } from './app'
 
-describe('app definitions', () => {
+describe('app data', () => {
   it('returns the app name', () => {
     expect(getAppName()).toBe('LendIt UJAP')
   })
