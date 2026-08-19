@@ -551,8 +551,8 @@ const trustPoints = [
 
 .loan-card--back {
   position: absolute;
-  top: 305px;
-  left: 130px;
+  top: 275px;
+  left: 260px;
   transform: rotate(5deg);
   z-index: 1;
   background: var(--paper-3);
