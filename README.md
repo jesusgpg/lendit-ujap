@@ -68,19 +68,19 @@ En el directorio del proyecto, puedes ejecutar:
 
 ```bash
 # Instalar dependencias
-npm install
+pnpm install
 
 # Servidor de desarrollo
-npm run dev
+pnpm dev
 
 # Compilar el proyecto para producción (Type-check con vue-tsc + build)
-npm run build
+pnpm build
 
 # Previsualizar la versión compilada de producción locally
-npm run preview
+pnpm preview
 
 # Ejecutar pruebas unitarias de Vitest
-npm run test
+pnpm test
 ```
 
 ---
