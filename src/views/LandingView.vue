@@ -398,6 +398,20 @@ const trustPoints = [
   }
 }
 
+@media (max-width: 380px) {
+  .site-header {
+    gap: 12px;
+    padding: 12px 16px;
+  }
+  .brand__crest {
+    width: 36px;
+    height: 36px;
+  }
+  .brand__name {
+    font-size: 16px;
+  }
+}
+
 
 /* ---------- hero ---------- */
 .hero {
@@ -468,6 +482,7 @@ const trustPoints = [
 
 .hero__stats {
   display: flex;
+  flex-wrap: wrap;
   gap: clamp(20px, 4vw, 40px);
   margin: 48px 0 0;
   padding-top: 28px;
@@ -536,8 +551,8 @@ const trustPoints = [
 
 .loan-card--back {
   position: absolute;
-  top: 305px;
-  left: 130px;
+  top: 275px;
+  left: 260px;
   transform: rotate(5deg);
   z-index: 1;
   background: var(--paper-3);
