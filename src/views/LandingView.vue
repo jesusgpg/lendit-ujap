@@ -544,6 +544,33 @@ const trustPoints = [
   animation: card-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both;
 }
 
+/* Debajo de 980px el hero pasa a una sola columna: el "abanico" de tarjetas
+   con posiciones absolutas ya no tiene el ancho fijo de 460px para el que
+   fue calculado, así que se reemplaza por una pila normal, sin solapar. */
+@media (max-width: 980px) {
+  .hero__art {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    min-height: 0;
+  }
+
+  .medallion {
+    position: static;
+    width: 160px;
+    height: 160px;
+  }
+
+  .loan-card--front,
+  .loan-card--back {
+    position: static;
+    left: auto;
+    top: auto;
+    transform: none;
+  }
+}
+
 /* ---------- ticker ---------- */
 .ticker {
   border-top: 1px solid var(--line);

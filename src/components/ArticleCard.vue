@@ -46,6 +46,7 @@ defineEmits<{
 <style scoped>
 .loan-card {
   width: 268px;
+  max-width: 100%;
   padding: 22px 22px 20px;
   border-radius: 16px;
   background: var(--paper-2);
