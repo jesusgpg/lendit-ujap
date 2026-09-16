@@ -3,5 +3,9 @@
   "framework": "vite",
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/categories/:key", "destination": "/api/categories?key=:key" },
+    { "source": "/api/careers/:id", "destination": "/api/careers?id=:id" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

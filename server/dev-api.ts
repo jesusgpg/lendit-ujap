@@ -7,9 +7,7 @@ import healthHandler from '../api/health.ts'
 import itemsHandler from '../api/items.ts'
 import meHandler from '../api/me.ts'
 import categoriesHandler from '../api/categories.ts'
-import categoryDetailHandler from '../api/categories/[key].ts'
 import careersHandler from '../api/careers.ts'
-import careerDetailHandler from '../api/careers/[id].ts'
 import schoolsHandler from '../api/schools.ts'
 import rolesHandler from '../api/roles.ts'
 import roleDetailHandler from '../api/roles/[id].ts'
@@ -47,9 +45,9 @@ app.all('/api/health', wrap(healthHandler))
 app.all('/api/items', wrap(itemsHandler))
 app.all('/api/me', wrap(meHandler))
 app.all('/api/categories', wrap(categoriesHandler))
-app.all('/api/categories/:key', withParamsAsQuery(categoryDetailHandler))
+app.all('/api/categories/:key', withParamsAsQuery(categoriesHandler))
 app.all('/api/careers', wrap(careersHandler))
-app.all('/api/careers/:id', withParamsAsQuery(careerDetailHandler))
+app.all('/api/careers/:id', withParamsAsQuery(careersHandler))
 app.all('/api/schools', wrap(schoolsHandler))
 app.all('/api/roles', wrap(rolesHandler))
 app.all('/api/roles/:id', withParamsAsQuery(roleDetailHandler))

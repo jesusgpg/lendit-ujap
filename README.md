@@ -104,7 +104,7 @@ pnpm db:promote admin@gmail.com ADMIN
 
 ### Despliegue en Vercel
 
-El proyecto incluye `vercel.json` para compilar la aplicación Vite, servir `dist` y permitir recargar directamente cualquier ruta de Vue Router. Las funciones de `api/` son detectadas automáticamente por Vercel.
+El proyecto incluye `vercel.json` para compilar la aplicación Vite, servir `dist` y permitir recargar directamente cualquier ruta de Vue Router. Las funciones de `api/` son detectadas automáticamente por Vercel. Para respetar el límite de 12 funciones del plan Hobby, las operaciones de detalle de categorías y carreras se enrutan hacia sus handlers principales.
 
 1. Importa el repositorio en Vercel usando la raíz del proyecto. El comando de build es `pnpm build`.
 2. Configura en Vercel, para Preview y Production, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL`, `DIRECT_URL` y `APP_URL`.
