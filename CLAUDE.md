@@ -48,6 +48,10 @@ Implementado:
 - Estado reactivo (`ref`/`computed`) para sesión, notificaciones, pasos completados y artículos.
 - Login y registro mediante Supabase Auth; estudiantes/profesores requieren `@ujap.edu.ve` y los administradores tienen acceso separado desde `/admin/login`.
 - Artículos, perfiles, roles, permisos, categorías, carreras y escuelas se sirven mediante funciones API y Prisma.
+- Catálogo, publicación, edición, eliminación y pausa/reactivación de objetos.
+- Solicitudes de préstamo con aprobación, rechazo, cancelación, devolución y control de solapamiento de fechas.
+- Modalidad de alquiler con precio/moneda y pagos simulados multimoneda.
+- Fotos de objetos en Supabase Storage con bucket y políticas de escritura por usuario.
 - Flujo: publicar sin sesión navega a `/login` y conserva la intención hasta autenticar.
 - Edición de perfil con foto optimizada en el navegador y persistida como `photoUrl`.
 - Panel administrativo con rutas `/admin/roles`, `/admin/users`, `/admin/categories` y `/admin/careers`.
@@ -56,6 +60,7 @@ Implementado:
 Pendiente / riesgos conocidos:
 - **GitHub**: el historial hasta ahora es prácticamente de un solo autor. El criterio "Organización en GitHub" del Avance 1 evalúa trabajo visible de todos los integrantes del equipo — falta que cada quien suba su parte con su propia cuenta.
 - **Vercel/Supabase**: falta configurar las variables de producción, las URLs de redirección de Supabase y ejecutar `pnpm db:migrate:deploy` contra la base de datos remota.
+- La migración `20260916120000_item_modes_and_storage` debe aplicarse antes de usar fotos, alquileres o solicitudes en una base remota actualizada.
 - No hay ESLint/Prettier configurado (se planteó en clase para la Unidad 6).
 - El build local de Vercel requiere un proyecto/token válido para ejecutar `vercel build`; el build de Vite sí está validado con `pnpm build`.
 

@@ -18,6 +18,11 @@ function goToLogin() {
 
 function handleRegisterSuccess() {
   push.success({ title: 'Cuenta creada', message: 'Tu perfil ya está listo para usar LendIt.' })
+  const redirect = route.query.redirect
+  if (typeof redirect === 'string' && redirect.startsWith('/')) {
+    void router.replace(redirect)
+    return
+  }
   if (route.query.redirect === 'publish') {
     void router.replace({ name: 'landing', query: { publish: '1' } })
     return

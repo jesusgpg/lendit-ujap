@@ -25,6 +25,11 @@ function openModal(modal: typeof activeModal.value) {
   isMenuOpen.value = false
 }
 
+function navigateTo(path: string) {
+  isMenuOpen.value = false
+  void router.push(path)
+}
+
 function closeModal() {
   activeModal.value = null
 }
@@ -131,6 +136,21 @@ const themeOptions: { value: ThemeMode; label: string }[] = [
           <strong>{{ authStore.user?.name }}</strong>
           <span>{{ authStore.user?.email }}</span>
         </div>
+
+        <button class="account-menu__item" type="button" @click="navigateTo('/catalogo')">
+          <span class="account-menu__icon">⌕</span> Explorar objetos
+        </button>
+        <button class="account-menu__item" type="button" @click="navigateTo('/publicar')">
+          <span class="account-menu__icon">＋</span> Publicar objeto
+        </button>
+        <button class="account-menu__item" type="button" @click="navigateTo('/mis-publicaciones')">
+          <span class="account-menu__icon">▤</span> Mis publicaciones
+        </button>
+        <button class="account-menu__item" type="button" @click="navigateTo('/solicitudes')">
+          <span class="account-menu__icon">↔</span> Solicitudes
+        </button>
+
+        <div class="account-menu__divider"></div>
 
         <button class="account-menu__item" type="button" @click="openProfileModal">
           <span class="account-menu__icon">☺</span> Perfil

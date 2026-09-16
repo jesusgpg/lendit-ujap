@@ -23,6 +23,10 @@ router.beforeEach(async (to) => {
   if (typeof requiredPermission === 'string' && !authStore.hasPermission(requiredPermission)) {
     return { name: 'admin-login', query: { redirect: to.fullPath } }
   }
+
+  if (to.meta.requiresAuth === true && !authStore.isAuthenticated) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
 })
 
 app

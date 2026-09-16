@@ -7,8 +7,10 @@ withDefaults(
   defineProps<{
     /** Ancla activa en la landing (para subrayar el link correspondiente). */
     showLandingNav?: boolean
+    /** Navegación del producto para las pantallas de catálogo y publicaciones. */
+    showMarketplaceNav?: boolean
   }>(),
-  { showLandingNav: false },
+  { showLandingNav: false, showMarketplaceNav: false },
 )
 
 const emit = defineEmits<{
@@ -29,7 +31,13 @@ const appName = getAppName()
     </router-link>
 
     <nav class="site-nav">
-      <template v-if="showLandingNav">
+      <template v-if="showMarketplaceNav">
+        <router-link to="/catalogo">Explorar</router-link>
+        <router-link v-if="authStore.isAuthenticated" to="/publicar">Publicar</router-link>
+        <router-link v-if="authStore.isAuthenticated" to="/mis-publicaciones">Mis publicaciones</router-link>
+        <router-link v-if="authStore.isAuthenticated" to="/solicitudes">Solicitudes</router-link>
+      </template>
+      <template v-if="showLandingNav && !authStore.isAuthenticated">
         <a href="#como-funciona">Cómo funciona</a>
         <a href="#categorias">Categorías</a>
         <a href="#confianza">Confianza</a>
