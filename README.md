@@ -109,7 +109,7 @@ El proyecto incluye `vercel.json` para compilar la aplicación Vite, servir `dis
 1. Importa el repositorio en Vercel usando la raíz del proyecto. El comando de build es `pnpm build`.
 2. Configura en Vercel, para Preview y Production, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL`, `DIRECT_URL` y `APP_URL`.
 3. Deja `VITE_API_BASE_URL` vacío o sin definir: en Vercel el frontend y las funciones API comparten el mismo dominio.
-4. Mantén `ALLOW_TEST_EMAILS` y `VITE_ALLOW_TEST_EMAILS` en `false`. `DIRECT_URL` debe estar disponible durante la instalación porque `postinstall` ejecuta `prisma generate`.
+4. Mantén `ALLOW_TEST_EMAILS` y `VITE_ALLOW_TEST_EMAILS` en `false`. El build puede ejecutar `prisma generate` sin `DIRECT_URL`; esta variable sí es obligatoria cuando ejecutes migraciones.
 5. Ejecuta una vez `pnpm db:migrate:deploy` usando las credenciales de la base de datos de producción antes de probar la API.
 6. En Supabase Auth, establece la URL del sitio y las URLs de redirección con el dominio de Vercel o el dominio personalizado; `APP_URL` debe apuntar a ese mismo origen.
 7. Comprueba `/`, `/login`, `/register`, `/admin/login` y `/api/health` después del primer despliegue.
