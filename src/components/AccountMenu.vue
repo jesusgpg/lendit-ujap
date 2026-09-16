@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { push } from 'notivue'
 import { useAuthStore } from '../stores/auth'
 import { apiRequest } from '../lib/api'
+import { uploadItemPhoto } from '../lib/storage'
 import { fontSize, theme, colorblind, type FontSize, type ThemeMode } from '../lib/accessibility'
 import ModalDialog from './ModalDialog.vue'
 import PhotoDropzone from './PhotoDropzone.vue'
@@ -87,13 +88,19 @@ async function saveProfile() {
   isSavingProfile.value = true
   profileError.value = ''
   try {
+    // Un data URL recién capturado por PhotoDropzone se sube a Storage antes de
+    // guardarlo: persistir el base64 crudo en el perfil infla el registro sin necesidad.
+    const photoUrl = profileForm.value.photoUrl.startsWith('data:')
+      ? await uploadItemPhoto(profileForm.value.photoUrl)
+      : profileForm.value.photoUrl || null
+
     await apiRequest('/api/me', {
       method: 'PATCH',
       body: JSON.stringify({
         firstName: profileForm.value.firstName,
         lastName: profileForm.value.lastName,
         phone: profileForm.value.phone,
-        photoUrl: profileForm.value.photoUrl || null,
+        photoUrl,
       }),
     })
     await authStore.syncProfile()

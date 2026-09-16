@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import type { Session } from '@supabase/supabase-js'
 import { apiRequest } from '../lib/api'
 import { getSupabaseClient } from '../lib/supabase'
+import { uploadItemPhoto } from '../lib/storage'
 import type { AuthUser, LoginCredentials, RegisterInput } from '../types'
 
 interface AuthResult {
@@ -183,7 +184,6 @@ export const useAuthStore = defineStore('auth', {
               careerId: input.careerId,
               role: input.role,
               phone: input.phone.trim(),
-              photoUrl: input.photo,
             },
           },
         })
@@ -194,11 +194,17 @@ export const useAuthStore = defineStore('auth', {
 
         if (data.session) {
           await this.syncProfile(data.session)
-          const response = await apiRequest<ProfileResponse>('/api/me', {
-            method: 'PATCH',
-            body: JSON.stringify({ photoUrl: input.photo }),
-          })
-          this.user = response.user
+          // La foto se sube a Storage aquí (no como metadata de Auth): un data URL
+          // en los metadatos del usuario viaja embebido en cada JWT y puede inflar
+          // los headers de Authorization lo suficiente para que el servidor los rechace.
+          if (input.photo) {
+            const photoUrl = await uploadItemPhoto(input.photo)
+            const response = await apiRequest<ProfileResponse>('/api/me', {
+              method: 'PATCH',
+              body: JSON.stringify({ photoUrl }),
+            })
+            this.user = response.user
+          }
           return { ok: true }
         }
 
@@ -257,11 +263,10 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
-      try {
-        await getSupabaseClient().auth.signOut()
-      } finally {
-        this.user = null
-      }
+      // Se limpia de inmediato para que la UI refleje la salida sin esperar
+      // la respuesta remota, que puede tardar o fallar por red.
+      this.user = null
+      await getSupabaseClient().auth.signOut()
     },
   },
 })

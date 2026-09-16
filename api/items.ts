@@ -55,6 +55,7 @@ const deleteItemSchema = z.object({ id: z.string().uuid() })
 
 type ItemForSerialization = {
   id: string
+  ownerId: string
   code: string
   title: string
   description: string | null
@@ -79,6 +80,7 @@ function serializeItem(item: ItemForSerialization) {
 
   return {
     id: item.id,
+    ownerId: item.ownerId,
     code: item.code,
     title: item.title,
     description: item.description,

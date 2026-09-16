@@ -5,29 +5,21 @@ import { push } from 'notivue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAppTagline } from '../data'
 import { useAuthStore } from '../stores/auth'
-import { useArticlesStore } from '../stores/articles'
 import { useCatalogStore } from '../stores/catalog'
-import ArticleCard from '../components/ArticleCard.vue'
 import CategoryCard from '../components/CategoryCard.vue'
 import StepCard from '../components/StepCard.vue'
-import ModalDialog from '../components/ModalDialog.vue'
-import RequestLoanForm from '../components/RequestLoanForm.vue'
 import SiteHeader from '../components/SiteHeader.vue'
 import SiteFooter from '../components/SiteFooter.vue'
-import type { Article } from '../types'
 
 const tagline = getAppTagline()
 const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
 const campusSrc = `${import.meta.env.BASE_URL}images/ujap_escultura.jpg`
 
 const authStore = useAuthStore()
-const articlesStore = useArticlesStore()
 const catalogStore = useCatalogStore()
 const route = useRoute()
 const router = useRouter()
-const articles = computed(() => articlesStore.articles)
 const fullCategories = computed(() => catalogStore.categories)
-const selectedArticle = ref<Article | null>(null)
 
 // Los pasos leídos se conservan entre visitas sin manejar localStorage a mano.
 const completedSteps = useLocalStorage<Record<string, boolean>>('lendit:completed-steps', {})
@@ -49,7 +41,6 @@ function openPublish() {
 }
 
 onMounted(() => {
-  void articlesStore.initialize()
   void catalogStore.initialize()
 
   if (route.query.publish === '1' && authStore.isAuthenticated) {
@@ -59,22 +50,6 @@ onMounted(() => {
 
 function handleLogout() {
   push.info({ title: 'Sesión cerrada', message: 'Puedes volver a entrar cuando lo necesites.' })
-}
-
-// Manejo de eventos (Emits)
-const handleRequest = (articleId: string) => {
-  const article = articles.value.find((a) => a.id === articleId)
-  if (article) {
-    if (!authStore.isAuthenticated) {
-      openLogin()
-      return
-    }
-    selectedArticle.value = article
-  }
-}
-
-function closeRequestForm() {
-  selectedArticle.value = null
 }
 
 const handleSelectCategory = (categoryKey: string) => {
@@ -131,7 +106,7 @@ const trustPoints = [
 
 <template>
   <div class="page">
-    <SiteHeader show-landing-nav show-marketplace-nav @open-login="openLogin()" @logout="handleLogout" />
+    <SiteHeader show-marketplace-nav @open-login="openLogin()" @logout="handleLogout" />
 
     <main id="top">
       <section class="hero">
@@ -175,20 +150,6 @@ const trustPoints = [
             <div class="medallion__ring"></div>
             <img class="medallion__crest" :src="crestSrc" alt="" />
           </div>
-
-          <ArticleCard
-            v-if="articles[0]"
-            :article="articles[0]"
-            class="loan-card--front"
-            @request="handleRequest"
-          />
-
-          <ArticleCard
-            v-if="articles[1]"
-            :article="articles[1]"
-            class="loan-card--back"
-            @request="handleRequest"
-          />
         </div>
       </section>
 
@@ -253,11 +214,6 @@ const trustPoints = [
     </main>
 
     <SiteFooter />
-
-    <ModalDialog v-if="selectedArticle" wide title="Solicitar objeto" @close="closeRequestForm">
-      <RequestLoanForm :article="selectedArticle" @submitted="closeRequestForm" />
-    </ModalDialog>
-
   </div>
 </template>
 
@@ -459,28 +415,8 @@ const trustPoints = [
   object-fit: contain;
 }
 
-.loan-card--front {
-  position: absolute;
-  top: 250px;
-  left: -14px;
-  transform: rotate(-4deg);
-  z-index: 2;
-  animation: card-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
-}
-
-.loan-card--back {
-  position: absolute;
-  top: 326px;
-  left: 228px;
-  transform: rotate(5deg);
-  z-index: 1;
-  background: var(--paper-3);
-  animation: card-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both;
-}
-
-/* Debajo de 980px el hero pasa a una sola columna: el "abanico" de tarjetas
-   con posiciones absolutas ya no tiene el ancho fijo de 460px para el que
-   fue calculado, así que se reemplaza por una pila normal, sin solapar. */
+/* Debajo de 980px el hero pasa a una sola columna: sin ancho fijo de 460px
+   para el que fue calculado el posicionamiento absoluto del escudo. */
 @media (max-width: 980px) {
   .hero__art {
     display: flex;
@@ -502,14 +438,6 @@ const trustPoints = [
     position: static;
     width: 160px;
     height: 160px;
-  }
-
-  .loan-card--front,
-  .loan-card--back {
-    position: static;
-    left: auto;
-    top: auto;
-    transform: none;
   }
 }
 
@@ -703,13 +631,6 @@ const trustPoints = [
   }
 }
 
-@keyframes card-in {
-  from {
-    opacity: 0;
-    transform: translateY(20px) rotate(0deg);
-  }
-}
-
 @keyframes float {
   0%,
   100% {
@@ -732,7 +653,6 @@ const trustPoints = [
 @media (prefers-reduced-motion: reduce) {
   .hero__copy,
   .hero__art,
-  .loan-card,
   .medallion,
   .ticker__track {
     animation: none !important;

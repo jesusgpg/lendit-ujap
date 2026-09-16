@@ -3,6 +3,7 @@ export type Currency = 'USD' | 'EUR' | 'VES'
 
 export interface Article {
   id: string
+  ownerId: string
   code: string
   title: string
   description?: string | null

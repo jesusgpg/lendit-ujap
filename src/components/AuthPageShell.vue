@@ -26,7 +26,7 @@ function goToLogin() {
 
 <template>
   <div class="auth-page" :class="{ 'auth-page--wide-card': wideCard }">
-    <SiteHeader @open-login="goToLogin" />
+    <SiteHeader show-marketplace-nav @open-login="goToLogin" />
 
     <main class="auth-page__layout">
       <section class="auth-page__intro" aria-labelledby="auth-page-title">
