@@ -14,6 +14,7 @@ const articlesStore = useArticlesStore()
 const updatingId = ref<string | null>(null)
 const deletingId = ref<string | null>(null)
 const editingArticle = ref<Article | null>(null)
+const articleToDelete = ref<Article | null>(null)
 
 const availableCount = computed(() => articlesStore.myArticles.filter((article) => article.status === 'available').length)
 const pausedCount = computed(() => articlesStore.myArticles.filter((article) => article.status === 'paused').length)
@@ -83,9 +84,19 @@ async function toggleStatus(article: Article) {
   }
 }
 
-async function deletePublication(article: Article) {
-  if (!window.confirm(`¿Eliminar “${article.title}”? Esta acción no se puede deshacer.`)) return
+function requestDelete(article: Article) {
+  articleToDelete.value = article
+}
 
+function cancelDelete() {
+  articleToDelete.value = null
+}
+
+async function confirmDelete() {
+  const article = articleToDelete.value
+  if (!article) return
+
+  articleToDelete.value = null
   deletingId.value = article.id
   try {
     const deleted = await articlesStore.remove(article.id)
@@ -202,7 +213,7 @@ async function deletePublication(article: Article) {
                 class="publication-row__action publication-row__action--danger"
                 type="button"
                 :disabled="deletingId === article.id || updatingId === article.id"
-                @click="deletePublication(article)"
+                @click="requestDelete(article)"
               >
                 {{ deletingId === article.id ? 'Eliminando…' : 'Eliminar' }}
               </button>
@@ -216,6 +227,16 @@ async function deletePublication(article: Article) {
 
     <ModalDialog v-if="editingArticle" wide title="Editar publicación" @close="closeEdit">
       <PublishArticleForm :article="editingArticle" submit-label="Guardar cambios" @updated="handleUpdated" />
+    </ModalDialog>
+
+    <ModalDialog v-if="articleToDelete" title="Eliminar publicación" @close="cancelDelete">
+      <p class="confirm-delete__message">
+        ¿Eliminar “{{ articleToDelete.title }}”? Esta acción no se puede deshacer.
+      </p>
+      <div class="confirm-delete__actions">
+        <button class="btn btn--ghost" type="button" @click="cancelDelete">Cancelar</button>
+        <button class="btn btn--primary" type="button" @click="confirmDelete">Eliminar</button>
+      </div>
     </ModalDialog>
   </div>
 </template>
@@ -614,5 +635,15 @@ async function deletePublication(article: Article) {
     padding-left: 0;
     border-left: 0;
   }
+}
+
+.confirm-delete__message {
+  margin-bottom: 24px;
+}
+
+.confirm-delete__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>

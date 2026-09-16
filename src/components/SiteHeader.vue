@@ -5,12 +5,10 @@ import AccountMenu from './AccountMenu.vue'
 
 withDefaults(
   defineProps<{
-    /** Ancla activa en la landing (para subrayar el link correspondiente). */
-    showLandingNav?: boolean
     /** Navegación del producto para las pantallas de catálogo y publicaciones. */
     showMarketplaceNav?: boolean
   }>(),
-  { showLandingNav: false, showMarketplaceNav: false },
+  { showMarketplaceNav: false },
 )
 
 const emit = defineEmits<{
@@ -37,10 +35,10 @@ const appName = getAppName()
         <router-link v-if="authStore.isAuthenticated" to="/mis-publicaciones">Mis publicaciones</router-link>
         <router-link v-if="authStore.isAuthenticated" to="/solicitudes">Solicitudes</router-link>
       </template>
-      <template v-if="showLandingNav && !authStore.isAuthenticated">
-        <a href="#como-funciona">Cómo funciona</a>
-        <a href="#categorias">Categorías</a>
-        <a href="#confianza">Confianza</a>
+      <template v-if="!authStore.isAuthenticated">
+        <a href="/#como-funciona">Cómo funciona</a>
+        <a href="/#categorias">Categorías</a>
+        <a href="/#confianza">Confianza</a>
       </template>
       <router-link v-if="authStore.hasPermission('roles.manage')" class="site-nav__admin" to="/admin">
         Administración

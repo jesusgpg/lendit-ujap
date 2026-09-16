@@ -17,6 +17,19 @@ const catalog = useCatalogStore()
 const photoPreview = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
+const catalogError = ref('')
+
+async function loadCatalog() {
+  catalogError.value = ''
+  try {
+    await catalog.initialize()
+    if (!careerId.value) {
+      setFieldValue('careerId', catalog.careers[0]?.id ?? '')
+    }
+  } catch (error) {
+    catalogError.value = error instanceof Error ? error.message : 'No se pudieron cargar las carreras.'
+  }
+}
 const { defineField, errors, handleSubmit, isSubmitting, setFieldValue } = useForm({
   initialValues: {
     firstName: '',
@@ -45,11 +58,8 @@ const [careerId, careerIdAttrs] = defineField('careerId')
 const [role, roleAttrs] = defineField('role')
 const [phoneValue, phoneAttrs] = defineField('phone')
 
-onMounted(async () => {
-  await catalog.initialize()
-  if (!careerId.value) {
-    setFieldValue('careerId', catalog.careers[0]?.id ?? '')
-  }
+onMounted(() => {
+  void loadCatalog()
 })
 
 function handlePhotoUpdate(dataUrl: string) {
@@ -145,10 +155,14 @@ const onSubmit = handleSubmit(async (values) => {
 
     <label class="field">
       <span>Carrera</span>
-      <select v-model="careerId" v-bind="careerIdAttrs" required>
+      <select v-model="careerId" v-bind="careerIdAttrs" required :disabled="!catalog.careers.length">
         <option v-for="c in catalog.careers" :key="c.id" :value="c.id">{{ c.name }}</option>
       </select>
       <span v-if="errors.careerId" class="field__error">{{ errors.careerId }}</span>
+      <p v-if="catalogError" class="field__error">
+        {{ catalogError }}
+        <button class="auth-form__retry" type="button" @click="loadCatalog">Reintentar</button>
+      </p>
     </label>
 
     <div class="auth-form__role-field">
@@ -305,6 +319,18 @@ const onSubmit = handleSubmit(async (values) => {
   color: var(--crimson-dark);
   font-size: 12px;
   font-weight: 500;
+}
+
+.auth-form__retry {
+  margin-left: 6px;
+  border: none;
+  background: none;
+  color: var(--crimson-dark);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
 }
 
 .auth-form__success {

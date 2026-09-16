@@ -66,6 +66,11 @@ function handleRequest(articleId: string) {
     return
   }
 
+  if (article.ownerId === authStore.user?.id) {
+    push.info({ title: 'Es tuyo', message: 'No puedes pedir o alquilar tu propia publicación.' })
+    return
+  }
+
   selectedArticle.value = article
 }
 
@@ -146,6 +151,7 @@ function handleRequestSubmitted() {
             v-for="article in filteredArticles"
             :key="article.id"
             :article="article"
+            :is-own="article.ownerId === authStore.user?.id"
             @request="handleRequest"
           />
         </div>

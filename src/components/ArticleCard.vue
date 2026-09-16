@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import type { Article } from '../types'
 
-defineProps<{
-  article: Article
-}>()
+withDefaults(
+  defineProps<{
+    article: Article
+    isOwn?: boolean
+  }>(),
+  { isOwn: false },
+)
 
 defineEmits<{
   (e: 'request', articleId: string): void
@@ -49,8 +53,10 @@ function formatOffer(article: { mode: string; price: number | null; currency: st
       <div v-else class="loan-card__return">
         <span>Listo para retirar</span>
       </div>
-      <button 
-        class="btn-action" 
+      <span v-if="isOwn" class="loan-card__own">Es tuyo</span>
+      <button
+        v-else
+        class="btn-action"
         :class="{ 'btn-action--available': article.status === 'available' }"
         @click="$emit('request', article.id)"
       >
@@ -201,5 +207,12 @@ function formatOffer(article: { mode: string; price: number | null; currency: st
   background: var(--gold);
   color: var(--navy);
   border-color: var(--gold);
+}
+
+.loan-card__own {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
 }
 </style>

@@ -74,9 +74,14 @@ export const useArticlesStore = defineStore('articles', {
     },
 
     async update(id: string, input: UpdateArticleInput) {
+      const { status, ...rest } = input
       const response = await apiRequest<ItemResponse>('/api/items', {
         method: 'PATCH',
-        body: JSON.stringify({ id, ...input }),
+        body: JSON.stringify({
+          id,
+          ...rest,
+          ...(status ? { status: status.toUpperCase() } : {}),
+        }),
       })
 
       this.myArticles = this.myArticles.map((article) => (article.id === id ? response.item : article))
