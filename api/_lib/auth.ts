@@ -1,4 +1,4 @@
-import { createClient, type User } from '@supabase/supabase-js'
+import { createClient, type AuthUser } from '@supabase/supabase-js'
 import { prisma } from './prisma.js'
 
 export type ApiRequest = {
@@ -14,6 +14,13 @@ export type ApiResponse = {
 }
 
 let serverClient: ReturnType<typeof createClient> | null = null
+
+type ServerAuthApi = {
+  getUser: (jwt?: string) => Promise<{
+    data: { user: AuthUser | null }
+    error: Error | null
+  }>
+}
 
 function getServerClient() {
   const supabaseUrl = process.env.SUPABASE_URL
@@ -45,7 +52,7 @@ function getAuthorizationHeader(req: ApiRequest): string | null {
 }
 
 export async function getAuthenticatedUser(req: ApiRequest): Promise<
-  | { user: User; error: null }
+  | { user: AuthUser; error: null }
   | { user: null; error: 'UNAUTHORIZED' | 'AUTH_NOT_CONFIGURED' }
 > {
   const authorization = getAuthorizationHeader(req)
@@ -55,7 +62,10 @@ export async function getAuthenticatedUser(req: ApiRequest): Promise<
 
   try {
     const token = authorization.slice('Bearer '.length).trim()
-    const { data, error } = await getServerClient().auth.getUser(token)
+    // Supabase 2.116 exposes the inherited auth methods inconsistently across
+    // TypeScript module-resolution modes, although they exist at runtime.
+    const auth = getServerClient().auth as unknown as ServerAuthApi
+    const { data, error } = await auth.getUser(token)
 
     if (error || !data?.user) {
       return { user: null, error: 'UNAUTHORIZED' }

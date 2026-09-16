@@ -2,6 +2,13 @@ import { createClient } from '@supabase/supabase-js'
 import { prisma } from '../../_lib/prisma.js'
 import { getAuthenticatedProfile, hasPermission, statusForProfileError, type ApiRequest, type ApiResponse } from '../../_lib/auth.js'
 
+type PasswordRecoveryAuthApi = {
+  resetPasswordForEmail: (
+    email: string,
+    options?: { redirectTo?: string },
+  ) => Promise<{ error: Error | null }>
+}
+
 export default async function handler(req: ApiRequest & { query?: { id?: string } }, res: ApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' })
@@ -35,7 +42,10 @@ export default async function handler(req: ApiRequest & { query?: { id?: string 
     const supabase = createClient(supabaseUrl, supabaseKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(targetUser.email, {
+    // Keep the serverless type-check independent of Supabase's inherited auth
+    // declarations while calling the public method at runtime.
+    const auth = supabase.auth as unknown as PasswordRecoveryAuthApi
+    const { error: resetError } = await auth.resetPasswordForEmail(targetUser.email, {
       redirectTo: process.env.APP_URL,
     })
     if (resetError) {

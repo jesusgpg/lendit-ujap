@@ -41,7 +41,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(400).json({ ok: false, error: 'INVALID_CATEGORY' })
     }
 
-    const category = await prisma.category.create({ data: parsed.data })
+    const { key, ...categoryData } = parsed.data
+    if (!key) {
+      return res.status(400).json({ ok: false, error: 'INVALID_CATEGORY' })
+    }
+
+    const category = await prisma.category.create({ data: { ...categoryData, key } })
     return res.status(201).json({ ok: true, category })
   } catch (error) {
     if (error instanceof Error && error.message.includes('Unique constraint')) {
