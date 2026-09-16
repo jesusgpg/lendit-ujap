@@ -15,12 +15,20 @@ pnpm-debug.log*
 dist/
 dist-ssr/
 *.tsbuildinfo
+generated/
 
 # Vite
 .vite/
 
+# Vercel local project metadata
+.vercel/
+
 # Test coverage
 coverage/
+
+# Browser automation artifacts
+.playwright-cli/
+output/
 
 # OS
 .DS_Store
@@ -39,4 +47,6 @@ docs/
 
 # Claude Code local settings
 .claude/
-CLAUDE.md
+
+# Codex local settings
+.codex/

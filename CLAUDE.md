@@ -7,14 +7,18 @@ Proyecto del curso Electiva Profesional III – Tópicos Especiales en Programac
 - Vue 3 (Composition API, `<script setup>`) + TypeScript
 - Vue Router, Pinia
 - Vite, Vitest
-- Sin backend todavía — todos los datos son mock/localStorage (la API real llega en la Unidad 4 del curso)
+- Funciones serverless en `api/` para Vercel
+- Supabase Auth + PostgreSQL mediante Prisma
 
 ## Comandos
 
 ```
 pnpm dev      # servidor de desarrollo
+pnpm dev:full # frontend y API local mediante server/dev-api.ts
 pnpm build    # type-check (vue-tsc) + build de producción
 pnpm test     # vitest
+pnpm db:validate
+pnpm db:migrate:deploy
 ```
 
 ## Estructura
@@ -22,29 +26,38 @@ pnpm test     # vitest
 ```
 src/
   types/       interfaces TS puras (Article, Category, AuthUser, NewArticleInput...)
-  data/        funciones que devuelven datos mock (getArticles, getCategories, getAppName...)
-  stores/      Pinia — auth.ts (login mock + localStorage) y articles.ts (artículos publicados)
-  components/  presentacionales, comunican por props/emits (ArticleCard, CategoryCard, StepCard,
-               ModalDialog, LoginForm, PublishArticleForm)
-  views/       LandingView.vue (única vista por ahora)
-  router/
+  data/        datos mock estáticos que aún usa la landing
+  stores/      Pinia — sesión Supabase y catálogo conectado a la API
+  lib/         cliente Supabase, cliente HTTP y utilidades de acceso
+  components/ componentes presentacionales, formularios y paneles administrativos
+  views/       landing, login, registro y panel administrativo
+api/           funciones serverless HTTP detectadas por Vercel
+prisma/        schema, migraciones y cliente generado (generated/ está ignorado)
+server/        adaptador Express local para probar los handlers de api/
+scripts/       utilidades administrativas, como promote-user.ts
+vercel.json    build Vite y fallback para Vue Router
 ```
 
-`types/` y `data/` están separados a propósito: cuando llegue la Unidad 4 (API real), las funciones de `data/` se reemplazan por llamadas HTTP sin tocar las interfaces.
+`types/` y la capa de acceso (`src/lib/`, `api/`) permanecen separadas para que el frontend dependa de interfaces y no de detalles de PostgreSQL.
 
 ## Estado actual
 
 Implementado:
 - Landing responsiva (mobile-first) con Grid para la estructura general y Flexbox dentro de cada sección, HTML semántico.
 - Componentes con props/emits tipados contra interfaces de `types/`.
-- Estado reactivo (`ref`/`computed`) para notificaciones, pasos completados y artículos.
-- Dos formularios funcionales: login (mock, valida `@ujap.edu.ve` + contraseña ≥6 caracteres) y publicar artículo — ambos con `v-model`, validación básica y persistencia en `localStorage` vía Pinia.
-- Flujo: publicar sin sesión abre login primero y encadena al formulario de publicar tras autenticar.
+- Estado reactivo (`ref`/`computed`) para sesión, notificaciones, pasos completados y artículos.
+- Login y registro mediante Supabase Auth; estudiantes/profesores requieren `@ujap.edu.ve` y los administradores tienen acceso separado desde `/admin/login`.
+- Artículos, perfiles, roles, permisos, categorías, carreras y escuelas se sirven mediante funciones API y Prisma.
+- Flujo: publicar sin sesión navega a `/login` y conserva la intención hasta autenticar.
+- Edición de perfil con foto optimizada en el navegador y persistida como `photoUrl`.
+- Panel administrativo con rutas `/admin/roles`, `/admin/users`, `/admin/categories` y `/admin/careers`.
+- `vercel.json` configura el build de producción y el fallback requerido por Vue Router.
 
 Pendiente / riesgos conocidos:
 - **GitHub**: el historial hasta ahora es prácticamente de un solo autor. El criterio "Organización en GitHub" del Avance 1 evalúa trabajo visible de todos los integrantes del equipo — falta que cada quien suba su parte con su propia cuenta.
+- **Vercel/Supabase**: falta configurar las variables de producción, las URLs de redirección de Supabase y ejecutar `pnpm db:migrate:deploy` contra la base de datos remota.
 - No hay ESLint/Prettier configurado (se planteó en clase para la Unidad 6).
-- `LoginForm` y `PublishArticleForm` llaman a los stores de Pinia directamente en vez de solo emitir hacia el padre, a diferencia del resto de componentes (patrón puramente props+emit). Es una decisión válida pero inconsistente con el resto del código.
+- El build local de Vercel requiere un proyecto/token válido para ejecutar `vercel build`; el build de Vite sí está validado con `pnpm build`.
 
 ## Evaluación relevante
 

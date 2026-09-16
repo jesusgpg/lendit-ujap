@@ -1,35 +1,44 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { getAppName, getAppTagline, getCategories } from '../data'
+import { computed, onMounted, ref } from 'vue'
+import { useLocalStorage } from '@vueuse/core'
+import { push } from 'notivue'
+import { useRoute, useRouter } from 'vue-router'
+import { getAppTagline } from '../data'
 import { useAuthStore } from '../stores/auth'
 import { useArticlesStore } from '../stores/articles'
+import { useCatalogStore } from '../stores/catalog'
 import ArticleCard from '../components/ArticleCard.vue'
 import CategoryCard from '../components/CategoryCard.vue'
 import StepCard from '../components/StepCard.vue'
 import ModalDialog from '../components/ModalDialog.vue'
-import LoginForm from '../components/LoginForm.vue'
 import PublishArticleForm from '../components/PublishArticleForm.vue'
+import SiteHeader from '../components/SiteHeader.vue'
+import SiteFooter from '../components/SiteFooter.vue'
 
-const appName = getAppName()
 const tagline = getAppTagline()
-const fullCategories = ref(getCategories())
 const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
+const campusSrc = `${import.meta.env.BASE_URL}images/ujap_escultura.jpg`
 
 const authStore = useAuthStore()
 const articlesStore = useArticlesStore()
+const catalogStore = useCatalogStore()
+const route = useRoute()
+const router = useRouter()
 const articles = computed(() => articlesStore.articles)
+const fullCategories = computed(() => catalogStore.categories)
 
-// Estado reactivo para notificaciones y pasos
-const notification = ref<{ message: string; type: 'success' | 'info' } | null>(null)
-const completedSteps = ref<Record<string, boolean>>({})
+// Los pasos leídos se conservan entre visitas sin manejar localStorage a mano.
+const completedSteps = useLocalStorage<Record<string, boolean>>('lendit:completed-steps', {})
 
-// Estado reactivo de los modales de autenticación / publicación
-const activeModal = ref<'login' | 'publish' | null>(null)
-const pendingPublishAfterLogin = ref(false)
+// La publicación sigue siendo contextual; login y registro viven en rutas propias.
+const activeModal = ref<'publish' | null>(null)
 
 function openLogin(thenOpenPublish = false) {
-  pendingPublishAfterLogin.value = thenOpenPublish
-  activeModal.value = 'login'
+  if (thenOpenPublish) {
+    void router.push({ name: 'login', query: { redirect: 'publish' } })
+    return
+  }
+  void router.push({ name: 'login' })
 }
 
 function openPublish() {
@@ -42,27 +51,25 @@ function openPublish() {
 
 function closeModal() {
   activeModal.value = null
-  pendingPublishAfterLogin.value = false
 }
 
-function handleLoginSuccess() {
-  notification.value = { message: `¡Bienvenido/a, ${authStore.user?.name}!`, type: 'success' }
-  if (pendingPublishAfterLogin.value) {
-    pendingPublishAfterLogin.value = false
+onMounted(() => {
+  void articlesStore.initialize()
+  void catalogStore.initialize()
+
+  if (route.query.publish === '1' && authStore.isAuthenticated) {
     activeModal.value = 'publish'
-  } else {
-    closeModal()
+    void router.replace({ name: 'landing' })
   }
-}
+})
 
 function handleArticlePublished() {
-  notification.value = { message: '¡Tu objeto ya está publicado en LendIt!', type: 'success' }
+  push.success({ title: 'Objeto publicado', message: 'Tu objeto ya está disponible para el campus.' })
   closeModal()
 }
 
 function handleLogout() {
-  authStore.logout()
-  notification.value = { message: 'Sesión cerrada.', type: 'info' }
+  push.info({ title: 'Sesión cerrada', message: 'Puedes volver a entrar cuando lo necesites.' })
 }
 
 // Manejo de eventos (Emits)
@@ -70,38 +77,26 @@ const handleRequest = (articleId: string) => {
   const article = articles.value.find((a) => a.id === articleId)
   if (article) {
     if (article.status === 'available') {
-      notification.value = {
-        message: `¡Has solicitado el préstamo de: ${article.title}! Revisa tu buzón UJAP.`,
-        type: 'success',
-      }
+      push.success({
+        title: 'Solicitud enviada',
+        message: `Solicitaste ${article.title}. Revisa tu correo UJAP para conocer la respuesta.`,
+      })
     } else {
-      notification.value = {
-        message: `Has preguntado por la disponibilidad de: ${article.title}. Te avisaremos si se libera.`,
-        type: 'info',
-      }
+      push.info({
+        title: 'Consulta registrada',
+        message: `Te avisaremos cuando ${article.title} vuelva a estar disponible.`,
+      })
     }
-    // Auto-ocultar notificación
-    setTimeout(() => {
-      if (notification.value?.message.includes(article.title)) {
-        notification.value = null
-      }
-    }, 5000)
   }
 }
 
-const handleSelectCategory = (categoryId: string) => {
-  if (categoryId === 'more') {
-    notification.value = {
-      message: '¿Tienes algo diferente que prestar? ¡Regístralo en LendIt!',
-      type: 'info',
-    }
+const handleSelectCategory = (categoryKey: string) => {
+  if (categoryKey === 'more') {
+    push.info({ title: 'Comparte lo que tienes', message: 'Puedes publicar cualquier objeto útil para el campus.' })
   } else {
-    const cat = fullCategories.value.find((c) => c.id === categoryId)
+    const cat = fullCategories.value.find((c) => c.key === categoryKey)
     if (cat) {
-      notification.value = {
-        message: `Explorando la categoría: ${cat.label}`,
-        type: 'info',
-      }
+      push.info({ title: `Categoría: ${cat.label}`, message: 'Pronto podrás filtrar los objetos de esta categoría.' })
     }
   }
 }
@@ -109,10 +104,7 @@ const handleSelectCategory = (categoryId: string) => {
 const handleCompleteStep = (stepNum: string) => {
   completedSteps.value[stepNum] = !completedSteps.value[stepNum]
   if (completedSteps.value[stepNum]) {
-    notification.value = {
-      message: `¡Paso ${stepNum} marcado como leído!`,
-      type: 'success',
-    }
+    push.success({ title: 'Paso marcado', message: `El paso ${stepNum} quedó guardado como leído.` })
   }
 }
 
@@ -152,33 +144,7 @@ const trustPoints = [
 
 <template>
   <div class="page">
-    <!-- Banner de notificaciones premium -->
-    <Transition name="slide-down">
-      <div v-if="notification" class="notification-banner" :class="`notification-banner--${notification.type}`">
-        <span class="notification-banner__icon">
-          {{ notification.type === 'success' ? '✓' : 'ℹ' }}
-        </span>
-        <span class="notification-banner__text">{{ notification.message }}</span>
-        <button class="notification-banner__close" @click="notification = null">×</button>
-      </div>
-    </Transition>
-
-    <header class="site-header">
-      <a class="brand" href="#top">
-        <img class="brand__crest" :src="crestSrc" alt="Escudo Universidad José Antonio Páez" />
-        <span class="brand__name">{{ appName }}</span>
-      </a>
-      <nav class="site-nav">
-        <a href="#como-funciona">Cómo funciona</a>
-        <a href="#categorias">Categorías</a>
-        <a href="#confianza">Confianza</a>
-      </nav>
-      <div v-if="authStore.isAuthenticated" class="site-header__user">
-        <span>Hola, {{ authStore.user?.name }}</span>
-        <button class="btn btn--ghost btn--small" type="button" @click="handleLogout">Salir</button>
-      </div>
-      <button v-else class="btn btn--primary btn--small" type="button" @click="openLogin()">Empezar</button>
-    </header>
+    <SiteHeader show-landing-nav @open-login="openLogin()" @logout="handleLogout" />
 
     <main id="top">
       <section class="hero">
@@ -209,7 +175,15 @@ const trustPoints = [
           </dl>
         </div>
 
-        <div class="hero__art" aria-hidden="true">
+        <div class="hero__art">
+          <figure class="campus-card">
+            <img :src="campusSrc" alt="Escultura de la UJAP frente al campus universitario" />
+            <figcaption>
+              <span class="campus-card__label">Campus UJAP</span>
+              <span>San Diego · Carabobo</span>
+            </figcaption>
+          </figure>
+
           <div class="medallion">
             <div class="medallion__ring"></div>
             <img class="medallion__crest" :src="crestSrc" alt="" />
@@ -234,7 +208,7 @@ const trustPoints = [
       <div class="ticker" role="presentation">
         <div class="ticker__track">
           <span v-for="i in 2" :key="i" class="ticker__group">
-            <span v-for="category in fullCategories" :key="category.id + i" class="ticker__item">
+            <span v-for="category in fullCategories" :key="category.key + i" class="ticker__item">
               {{ category.label }}
             </span>
           </span>
@@ -261,7 +235,7 @@ const trustPoints = [
         <ul class="categories__grid">
           <CategoryCard
             v-for="category in fullCategories"
-            :key="category.id"
+            :key="category.key"
             :category="category"
             @select="handleSelectCategory"
           />
@@ -289,30 +263,9 @@ const trustPoints = [
         </ul>
       </section>
 
-      <section id="unirme" class="cta">
-        <div class="cta__seal">LU</div>
-        <h2>Tu próximo favor está a un préstamo de distancia</h2>
-        <p>Únete con tu correo institucional y ten tu primer objeto publicado en menos de cinco minutos.</p>
-        <button v-if="!authStore.isAuthenticated" class="btn btn--paper" type="button" @click="openLogin()">
-          Crear mi cuenta UJAP
-        </button>
-      </section>
     </main>
 
-    <footer class="site-footer">
-      <div class="brand brand--footer">
-        <img class="brand__crest" :src="crestSrc" alt="Escudo Universidad José Antonio Páez" />
-        <div>
-          <span class="brand__name">{{ appName }}</span>
-          <p>Hecho por estudiantes, para estudiantes de la UJAP.</p>
-        </div>
-      </div>
-      <p class="site-footer__note">© {{ new Date().getFullYear() }} {{ appName }} · San Diego, Carabobo</p>
-    </footer>
-
-    <ModalDialog v-if="activeModal === 'login'" title="Inicia sesión" @close="closeModal">
-      <LoginForm @success="handleLoginSuccess" />
-    </ModalDialog>
+    <SiteFooter />
 
     <ModalDialog v-if="activeModal === 'publish'" title="Publicar un objeto" @close="closeModal">
       <PublishArticleForm @published="handleArticlePublished" />
@@ -325,84 +278,11 @@ const trustPoints = [
   min-height: 100svh;
   background:
     radial-gradient(circle at 12% -10%, var(--gold-bg), transparent 45%),
-    radial-gradient(circle at 100% 0%, var(--crimson-bg), transparent 40%),
+    radial-gradient(circle at 100% 0%, var(--navy-bg), transparent 40%),
     var(--paper);
 }
 
-/* ---------- header ---------- */
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 16px clamp(20px, 5vw, 64px);
-  background: color-mix(in srgb, var(--paper) 88%, transparent);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  margin-right: auto;
-}
-
-.brand__crest {
-  width: 46px;
-  height: 46px;
-  object-fit: contain;
-}
-
-.brand__name {
-  font-family: var(--display);
-  font-weight: 650;
-  font-size: 19px;
-  color: var(--ink);
-  letter-spacing: -0.2px;
-}
-
-.site-header__user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.site-nav {
-  display: flex;
-  gap: 28px;
-}
-
-.site-nav a {
-  text-decoration: none;
-  font-size: 14.5px;
-  font-weight: 500;
-  color: var(--ink-soft);
-  position: relative;
-  padding-bottom: 2px;
-}
-
-.site-nav a:hover {
-  color: var(--crimson);
-}
-
-@media (max-width: 780px) {
-  .site-nav {
-    display: none;
-  }
-}
-
 @media (max-width: 380px) {
-  .site-header {
-    gap: 12px;
-    padding: 12px 16px;
-  }
   .brand__crest {
     width: 36px;
     height: 36px;
@@ -506,16 +386,67 @@ const trustPoints = [
 /* ---------- hero art ---------- */
 .hero__art {
   position: relative;
-  min-height: 470px;
+  min-height: 505px;
   animation: rise 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+.campus-card {
+  position: absolute;
+  inset: 24px 0 auto;
+  height: 318px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--gold-light) 55%, var(--line));
+  border-radius: 24px 5px 24px 24px;
+  background: var(--navy);
+  box-shadow: var(--shadow);
+  transform: rotate(1deg);
+}
+
+.campus-card::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 42%, rgba(12, 20, 43, 0.78));
+  content: '';
+}
+
+.campus-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(0.9) contrast(1.03);
+}
+
+.campus-card figcaption {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  left: 20px;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--on-dark-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.campus-card__label {
+  color: var(--on-dark);
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .medallion {
   position: absolute;
-  top: 0;
+  top: -16px;
   right: 8%;
-  width: 240px;
-  height: 240px;
+  width: 178px;
+  height: 178px;
   overflow: hidden;
   border-radius: 50%;
   animation: float 7s ease-in-out infinite;
@@ -542,8 +473,8 @@ const trustPoints = [
 
 .loan-card--front {
   position: absolute;
-  top: 195px;
-  left: 0;
+  top: 250px;
+  left: -14px;
   transform: rotate(-4deg);
   z-index: 2;
   animation: card-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
@@ -551,8 +482,8 @@ const trustPoints = [
 
 .loan-card--back {
   position: absolute;
-  top: 275px;
-  left: 260px;
+  top: 326px;
+  left: 228px;
   transform: rotate(5deg);
   z-index: 1;
   background: var(--paper-3);
@@ -571,6 +502,14 @@ const trustPoints = [
     min-height: 0;
   }
 
+  .campus-card {
+    position: relative;
+    inset: auto;
+    width: min(100%, 560px);
+    height: 260px;
+    transform: none;
+  }
+
   .medallion {
     position: static;
     width: 160px;
@@ -583,6 +522,17 @@ const trustPoints = [
     left: auto;
     top: auto;
     transform: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .campus-card {
+    height: 220px;
+  }
+
+  .campus-card figcaption {
+    flex-direction: column;
+    gap: 3px;
   }
 }
 
@@ -719,12 +669,17 @@ const trustPoints = [
   border: 1px solid var(--line);
   border-radius: 18px;
   overflow: hidden;
+  clip-path: inset(0 round 18px);
 }
 
 .trust-card {
   background: var(--paper-2);
   padding: 26px 30px;
   position: relative;
+}
+
+.trust-card:last-child {
+  border-radius: 0 0 17px 17px;
 }
 
 .trust-card::before {
@@ -746,83 +701,6 @@ const trustPoints = [
   font-size: 14.5px;
   color: var(--ink-faint);
   max-width: 60ch;
-}
-
-/* ---------- cta ---------- */
-.cta {
-  position: relative;
-  max-width: 1220px;
-  margin: 0 clamp(20px, 5vw, 64px) 96px;
-  padding: clamp(56px, 8vw, 88px) clamp(24px, 6vw, 64px);
-  border-radius: 28px;
-  background: linear-gradient(155deg, var(--navy) 0%, var(--navy-2) 100%);
-  color: var(--on-dark);
-  text-align: center;
-  overflow: hidden;
-}
-
-.cta::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 85% 20%, rgba(215, 173, 95, 0.25), transparent 55%);
-  pointer-events: none;
-}
-
-.cta__seal {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 28px;
-  border-radius: 50%;
-  border: 1.5px solid var(--gold-light);
-  font-family: var(--display);
-  font-weight: 650;
-  color: var(--gold-light);
-}
-
-.cta h2 {
-  color: var(--on-dark);
-  font-size: clamp(26px, 4vw, 38px);
-  max-width: 22ch;
-  margin: 0 auto;
-  letter-spacing: -0.5px;
-}
-
-.cta p {
-  margin: 18px auto 32px;
-  max-width: 44ch;
-  color: var(--on-dark-soft);
-  font-size: 15.5px;
-}
-
-/* ---------- footer ---------- */
-.site-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 20px;
-  padding: 32px clamp(20px, 5vw, 64px) 40px;
-  border-top: 1px solid var(--line);
-}
-
-.brand--footer {
-  gap: 14px;
-}
-
-.brand--footer p {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--ink-faint);
-}
-
-.site-footer__note {
-  font-size: 13px;
-  color: var(--ink-faint);
-  font-family: var(--mono);
 }
 
 /* ---------- animations ---------- */
@@ -873,94 +751,4 @@ const trustPoints = [
   }
 }
 
-/* ---------- notification banner ---------- */
-.notification-banner {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 24px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--paper-2) 92%, transparent);
-  backdrop-filter: blur(12px);
-  border: 1.5px solid var(--line);
-  box-shadow: var(--shadow-soft);
-  min-width: 320px;
-  max-width: 90vw;
-  box-sizing: border-box;
-}
-
-.notification-banner--success {
-  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
-}
-
-.notification-banner--success .notification-banner__icon {
-  color: var(--navy);
-  background: var(--gold);
-}
-
-.notification-banner--info {
-  border-color: color-mix(in srgb, var(--crimson) 50%, transparent);
-}
-
-.notification-banner--info .notification-banner__icon {
-  color: #fbf3e6;
-  background: var(--crimson);
-}
-
-.notification-banner__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.notification-banner__text {
-  font-size: 13.5px;
-  font-weight: 550;
-  color: var(--ink);
-  margin: 0;
-  flex: 1;
-}
-
-.notification-banner__close {
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  color: var(--ink-faint);
-  cursor: pointer;
-  padding: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s ease;
-}
-
-.notification-banner__close:hover {
-  color: var(--ink);
-}
-
-/* Animations for Transition */
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.slide-down-enter-from {
-  opacity: 0;
-  transform: translate(-50%, -30px);
-}
-
-.slide-down-leave-to {
-  opacity: 0;
-  transform: translate(-50%, -30px);
-}
 </style>

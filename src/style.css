@@ -1,18 +1,19 @@
 :root {
-  --paper: #f6f0e2;
+  --paper: #ffffff;
   --paper-2: #efe6d0;
   --paper-3: #e6dabd;
   --ink: #161d33;
   --ink-soft: #52503f;
   --ink-faint: #837d63;
-  --crimson: #9c1f34;
-  --crimson-dark: #711726;
-  --crimson-bg: rgba(156, 31, 52, 0.08);
-  --gold: #a97c2f;
-  --gold-light: #d7ad5f;
-  --gold-bg: rgba(169, 124, 47, 0.12);
-  --navy: #161d33;
-  --navy-2: #202a4a;
+  --crimson: #c8102e;
+  --crimson-dark: #96091f;
+  --crimson-bg: rgba(200, 16, 46, 0.08);
+  --gold: #c9971f;
+  --gold-light: #e8b94f;
+  --gold-bg: rgba(201, 151, 31, 0.14);
+  --navy: #1a2b6b;
+  --navy-2: #24398c;
+  --navy-bg: rgba(26, 43, 107, 0.1);
   --line: rgba(22, 29, 51, 0.16);
   --line-strong: rgba(22, 29, 51, 0.32);
   --shadow: 0 24px 48px -20px rgba(22, 15, 5, 0.35);
@@ -27,7 +28,7 @@
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   font: 17px/1.6 var(--sans);
-  color-scheme: light dark;
+  color-scheme: light;
   color: var(--ink-soft);
   background: var(--paper);
   font-synthesis: none;
@@ -36,27 +37,42 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #12131c;
-    --paper-2: #191b28;
-    --paper-3: #232537;
-    --ink: #f3ecd9;
-    --ink-soft: #cdc6b4;
-    --ink-faint: #8b8676;
-    --crimson: #d9536a;
-    --crimson-dark: #b23a4f;
-    --crimson-bg: rgba(217, 83, 106, 0.12);
-    --gold: #d7ad5f;
-    --gold-light: #e9cd8f;
-    --gold-bg: rgba(215, 173, 95, 0.14);
-    --navy: #0d101c;
-    --navy-2: #171a2b;
-    --line: rgba(243, 236, 217, 0.14);
-    --line-strong: rgba(243, 236, 217, 0.28);
-    --shadow: 0 24px 48px -20px rgba(0, 0, 0, 0.6);
-    --shadow-soft: 0 10px 24px -12px rgba(0, 0, 0, 0.5);
-  }
+:root[data-theme='dark'] {
+  --paper: #14171f;
+  --paper-2: #1c2030;
+  --paper-3: #242940;
+  --ink: #f3efe4;
+  --ink-soft: #cfc9b8;
+  --ink-faint: #8d8875;
+  --crimson: #e14a5f;
+  --crimson-dark: #ff6b7d;
+  --crimson-bg: rgba(225, 74, 95, 0.16);
+  --gold: #e8b94f;
+  --gold-light: #f3cd74;
+  --gold-bg: rgba(232, 185, 79, 0.18);
+  --navy: #0d1730;
+  --navy-2: #16224a;
+  --navy-bg: rgba(36, 57, 140, 0.25);
+  --line: rgba(255, 255, 255, 0.12);
+  --line-strong: rgba(255, 255, 255, 0.24);
+  --shadow: 0 24px 48px -20px rgba(0, 0, 0, 0.6);
+  --shadow-soft: 0 10px 24px -12px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+body {
+  background: var(--paper);
+}
+
+/* ---------- modo daltónico: cambia rojo/dorado por una paleta azul/naranja
+   (Okabe-Ito) que se distingue mejor en protanopia/deuteranopia ---------- */
+:root[data-colorblind] {
+  --crimson: #0072b2;
+  --crimson-dark: #00507e;
+  --crimson-bg: rgba(0, 114, 178, 0.1);
+  --gold: #e69f00;
+  --gold-light: #f2b341;
+  --gold-bg: rgba(230, 159, 0, 0.16);
 }
 
 * {

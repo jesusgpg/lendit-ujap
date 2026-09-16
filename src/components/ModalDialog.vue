@@ -1,7 +1,11 @@
 <script setup lang="ts">
-defineProps<{
-  title: string
-}>()
+withDefaults(
+  defineProps<{
+    title: string
+    wide?: boolean
+  }>(),
+  { wide: false },
+)
 
 defineEmits<{
   (e: 'close'): void
@@ -9,19 +13,21 @@ defineEmits<{
 </script>
 
 <template>
-  <Transition name="modal-fade">
-    <div class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal" role="dialog" aria-modal="true" :aria-label="title">
-        <header class="modal__header">
-          <h2>{{ title }}</h2>
-          <button class="modal__close" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
-        </header>
-        <div class="modal__body">
-          <slot />
+  <Teleport to="body">
+    <Transition name="modal-fade">
+      <div class="modal-overlay" @click.self="$emit('close')">
+        <div class="modal" :class="{ 'modal--wide': wide }" role="dialog" aria-modal="true" :aria-label="title">
+          <header class="modal__header">
+            <h2>{{ title }}</h2>
+            <button class="modal__close" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
+          </header>
+          <div class="modal__body">
+            <slot />
+          </div>
         </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -38,8 +44,7 @@ defineEmits<{
 }
 
 .modal {
-  width: 100%;
-  max-width: 420px;
+  width: min(100%, 380px);
   max-height: 90vh;
   overflow-y: auto;
   border-radius: 20px;
@@ -47,6 +52,30 @@ defineEmits<{
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   padding: 28px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.modal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+
+.modal::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--crimson) 55%, var(--line-strong));
+}
+
+.modal--wide {
+  width: 100%;
+  max-width: 540px;
 }
 
 .modal__header {

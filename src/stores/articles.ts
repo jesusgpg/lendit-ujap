@@ -1,36 +1,55 @@
 import { defineStore } from 'pinia'
-import { getArticles } from '../data'
+import { apiRequest } from '../lib/api'
 import type { Article, NewArticleInput } from '../types'
 
-const STORAGE_KEY = 'lendit-ujap:published-articles'
+interface ItemsResponse {
+  items: Article[]
+}
 
-function readCachedArticles(): Article[] {
-  const raw = localStorage.getItem(STORAGE_KEY)
-  return raw ? (JSON.parse(raw) as Article[]) : []
+interface ItemResponse {
+  item: Article
 }
 
 export const useArticlesStore = defineStore('articles', {
   state: () => ({
-    articles: [...getArticles(), ...readCachedArticles()] as Article[],
+    articles: [] as Article[],
+    isLoading: false,
+    error: null as string | null,
+    isInitialized: false,
   }),
 
   actions: {
-    publish(input: NewArticleInput) {
-      const article: Article = {
-        id: `article-${Date.now()}`,
-        code: `#UJAP-${Math.floor(1000 + Math.random() * 9000)}`,
-        title: input.title,
-        category: input.category,
-        duration: input.duration,
-        status: 'available',
+    async initialize() {
+      if (this.isInitialized || this.isLoading) {
+        return
       }
-      this.articles.unshift(article)
+      await this.load()
+    },
 
-      const cached = readCachedArticles()
-      cached.unshift(article)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cached))
+    async load() {
+      this.isLoading = true
+      this.error = null
 
-      return article
+      try {
+        const response = await apiRequest<ItemsResponse>('/api/items')
+        this.articles = response.items
+        this.isInitialized = true
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'No se pudieron cargar los objetos.'
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    // Se publica de inmediato: no hay cola de revisión.
+    async publish(input: NewArticleInput) {
+      const response = await apiRequest<ItemResponse>('/api/items', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      })
+
+      await this.load()
+      return response.item
     },
   },
 })
