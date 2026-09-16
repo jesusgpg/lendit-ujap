@@ -14,6 +14,11 @@ function getRedirectQuery() {
 
 function handleLoginSuccess() {
   push.success({ title: 'Sesión iniciada', message: 'Ya puedes continuar en LendIt.' })
+  const redirect = route.query.redirect
+  if (typeof redirect === 'string' && redirect.startsWith('/')) {
+    void router.replace(redirect)
+    return
+  }
   if (route.query.redirect === 'publish') {
     void router.replace({ name: 'landing', query: { publish: '1' } })
     return

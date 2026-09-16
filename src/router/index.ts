@@ -8,11 +8,24 @@ import RoleManagerPanel from '../components/RoleManagerPanel.vue'
 import UsersManagerPanel from '../components/UsersManagerPanel.vue'
 import CategoriesManagerPanel from '../components/CategoriesManagerPanel.vue'
 import CareersManagerPanel from '../components/CareersManagerPanel.vue'
+import CatalogView from '../views/CatalogView.vue'
+import PublishView from '../views/PublishView.vue'
+import MyPublicationsView from '../views/MyPublicationsView.vue'
+import RequestsView from '../views/RequestsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'landing', component: LandingView },
+    { path: '/catalogo', name: 'catalog', component: CatalogView },
+    { path: '/publicar', name: 'publish', component: PublishView, meta: { requiresAuth: true } },
+    {
+      path: '/mis-publicaciones',
+      name: 'my-publications',
+      component: MyPublicationsView,
+      meta: { requiresAuth: true },
+    },
+    { path: '/solicitudes', name: 'requests', component: RequestsView, meta: { requiresAuth: true } },
     { path: '/login', name: 'login', component: LoginView },
     { path: '/register', name: 'register', component: RegisterView },
     { path: '/admin/login', name: 'admin-login', component: AdminLoginView },

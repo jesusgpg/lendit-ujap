@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -22,6 +22,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 const isProcessing = ref(false)
 const errorMessage = ref('')
+const dropzoneLabel = computed(() => `${props.modelValue ? 'Cambiar' : 'Subir'} ${props.alt.toLowerCase()}`)
 
 function openPicker() {
   if (!isProcessing.value) {
@@ -105,7 +106,7 @@ function handleDrop(event: DragEvent) {
     :class="{ 'photo-dropzone--dragging': isDragging, 'photo-dropzone--filled': props.modelValue }"
     role="button"
     tabindex="0"
-    :aria-label="props.modelValue ? 'Cambiar foto de perfil' : 'Subir foto de perfil'"
+    :aria-label="dropzoneLabel"
     :aria-busy="isProcessing"
     @click="openPicker"
     @keydown.enter.prevent="openPicker"

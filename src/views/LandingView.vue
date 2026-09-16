@@ -11,9 +11,10 @@ import ArticleCard from '../components/ArticleCard.vue'
 import CategoryCard from '../components/CategoryCard.vue'
 import StepCard from '../components/StepCard.vue'
 import ModalDialog from '../components/ModalDialog.vue'
-import PublishArticleForm from '../components/PublishArticleForm.vue'
+import RequestLoanForm from '../components/RequestLoanForm.vue'
 import SiteHeader from '../components/SiteHeader.vue'
 import SiteFooter from '../components/SiteFooter.vue'
+import type { Article } from '../types'
 
 const tagline = getAppTagline()
 const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
@@ -26,16 +27,14 @@ const route = useRoute()
 const router = useRouter()
 const articles = computed(() => articlesStore.articles)
 const fullCategories = computed(() => catalogStore.categories)
+const selectedArticle = ref<Article | null>(null)
 
 // Los pasos leídos se conservan entre visitas sin manejar localStorage a mano.
 const completedSteps = useLocalStorage<Record<string, boolean>>('lendit:completed-steps', {})
 
-// La publicación sigue siendo contextual; login y registro viven en rutas propias.
-const activeModal = ref<'publish' | null>(null)
-
 function openLogin(thenOpenPublish = false) {
   if (thenOpenPublish) {
-    void router.push({ name: 'login', query: { redirect: 'publish' } })
+    void router.push({ name: 'login', query: { redirect: '/publicar' } })
     return
   }
   void router.push({ name: 'login' })
@@ -46,11 +45,7 @@ function openPublish() {
     openLogin(true)
     return
   }
-  activeModal.value = 'publish'
-}
-
-function closeModal() {
-  activeModal.value = null
+  void router.push({ name: 'publish' })
 }
 
 onMounted(() => {
@@ -58,15 +53,9 @@ onMounted(() => {
   void catalogStore.initialize()
 
   if (route.query.publish === '1' && authStore.isAuthenticated) {
-    activeModal.value = 'publish'
-    void router.replace({ name: 'landing' })
+    void router.replace({ name: 'publish' })
   }
 })
-
-function handleArticlePublished() {
-  push.success({ title: 'Objeto publicado', message: 'Tu objeto ya está disponible para el campus.' })
-  closeModal()
-}
 
 function handleLogout() {
   push.info({ title: 'Sesión cerrada', message: 'Puedes volver a entrar cuando lo necesites.' })
@@ -76,18 +65,16 @@ function handleLogout() {
 const handleRequest = (articleId: string) => {
   const article = articles.value.find((a) => a.id === articleId)
   if (article) {
-    if (article.status === 'available') {
-      push.success({
-        title: 'Solicitud enviada',
-        message: `Solicitaste ${article.title}. Revisa tu correo UJAP para conocer la respuesta.`,
-      })
-    } else {
-      push.info({
-        title: 'Consulta registrada',
-        message: `Te avisaremos cuando ${article.title} vuelva a estar disponible.`,
-      })
+    if (!authStore.isAuthenticated) {
+      openLogin()
+      return
     }
+    selectedArticle.value = article
   }
+}
+
+function closeRequestForm() {
+  selectedArticle.value = null
 }
 
 const handleSelectCategory = (categoryKey: string) => {
@@ -144,7 +131,7 @@ const trustPoints = [
 
 <template>
   <div class="page">
-    <SiteHeader show-landing-nav @open-login="openLogin()" @logout="handleLogout" />
+    <SiteHeader show-landing-nav show-marketplace-nav @open-login="openLogin()" @logout="handleLogout" />
 
     <main id="top">
       <section class="hero">
@@ -157,7 +144,7 @@ const trustPoints = [
           <p class="hero__tagline">{{ tagline }}</p>
           <div class="hero__actions">
             <button class="btn btn--primary" type="button" @click="openPublish">Publicar un objeto</button>
-            <a class="btn btn--ghost" href="#categorias">Ver categorías</a>
+            <router-link class="btn btn--ghost" to="/catalogo">Explorar catálogo</router-link>
           </div>
           <dl class="hero__stats">
             <div>
@@ -267,9 +254,10 @@ const trustPoints = [
 
     <SiteFooter />
 
-    <ModalDialog v-if="activeModal === 'publish'" title="Publicar un objeto" @close="closeModal">
-      <PublishArticleForm @published="handleArticlePublished" />
+    <ModalDialog v-if="selectedArticle" wide title="Solicitar objeto" @close="closeRequestForm">
+      <RequestLoanForm :article="selectedArticle" @submitted="closeRequestForm" />
     </ModalDialog>
+
   </div>
 </template>
 

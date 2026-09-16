@@ -8,10 +8,26 @@ defineProps<{
 defineEmits<{
   (e: 'request', articleId: string): void
 }>()
+
+function formatOffer(article: { mode: string; price: number | null; currency: string | null }) {
+  if (article.mode !== 'RENTAL' || article.price === null || !article.currency) {
+    return 'Préstamo gratuito'
+  }
+
+  return new Intl.NumberFormat('es-VE', {
+    style: 'currency',
+    currency: article.currency,
+    maximumFractionDigits: 2,
+  }).format(article.price)
+}
 </script>
 
 <template>
   <article class="loan-card">
+    <div class="loan-card__visual">
+      <img v-if="article.photoUrl" :src="article.photoUrl" :alt="`Foto de ${article.title}`" />
+      <span v-else aria-hidden="true">{{ article.categoryIcon || '·' }}</span>
+    </div>
     <header>
       <span 
         class="loan-card__tag" 
@@ -23,6 +39,7 @@ defineEmits<{
     </header>
     <h3>{{ article.title }}</h3>
     <p class="loan-card__meta">{{ article.category }} · {{ article.duration }}</p>
+    <p class="loan-card__offer">{{ formatOffer(article) }}</p>
     
     <footer class="loan-card__footer">
       <div v-if="article.status === 'lent' && article.returnTime" class="loan-card__return">
@@ -69,6 +86,27 @@ defineEmits<{
   margin-bottom: 14px;
 }
 
+.loan-card__visual {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 82px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 11px;
+  background: linear-gradient(135deg, var(--navy-bg), var(--gold-bg));
+}
+
+.loan-card__visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.loan-card__visual span {
+  font-size: 31px;
+}
+
 .loan-card__tag {
   font-family: var(--mono);
   font-size: 10.5px;
@@ -101,6 +139,14 @@ defineEmits<{
   margin: 4px 0 16px 0;
   font-size: 13px;
   color: var(--ink-faint);
+}
+
+.loan-card__offer {
+  margin-top: -9px;
+  color: var(--crimson-dark);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 
 .loan-card__footer {

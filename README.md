@@ -40,11 +40,16 @@ src/
 │   ├── LoginForm.vue           # Acceso institucional y administrativo reutilizable
 │   ├── RegisterForm.vue        # Registro con elección de rol (Estudiante/Profesor)
 │   ├── PhotoDropzone.vue       # Carga y optimización de fotos por arrastre
+│   ├── RequestLoanForm.vue     # Solicitud con fechas y pago simulado
 │   ├── LoadingState.vue         # Loader visual reutilizable para paneles
 │   ├── PublishArticleForm.vue  # Formulario para publicar nuevos objetos (con audiencia por rol)
 │   └── RoleManagerPanel.vue    # Panel de administración de roles/permisos (solo ADMIN)
 ├── views/         # Vistas principales de la aplicación:
 │   ├── LandingView.vue         # Vista principal (Landing page con todas las secciones)
+│   ├── CatalogView.vue         # Catálogo con búsqueda y filtros
+│   ├── PublishView.vue         # Publicación y edición de objetos
+│   ├── MyPublicationsView.vue  # Estante del propietario
+│   ├── RequestsView.vue        # Solicitudes, aprobaciones y devoluciones
 │   ├── AdminLoginView.vue      # Acceso separado para administradores
 │   ├── LoginView.vue           # Página de inicio de sesión comunitario
 │   └── RegisterView.vue        # Página de registro comunitario
@@ -62,14 +67,18 @@ src/
    - Soporte automático para **Modo Oscuro** en base a las preferencias del sistema del usuario.
 
 2. **Flujo de Usuario Integrado**:
-   - **Búsqueda y Peticiones**: Los estudiantes pueden ver objetos disponibles, solicitar préstamos (que genera una alerta simulada a su correo UJAP) o preguntar por artículos prestados.
-   - **Publicación Inteligente**: Si un usuario no autenticado intenta hacer clic en *"Publicar un objeto"*, la aplicación lo lleva a `/login` y, tras un ingreso exitoso, abre directamente el formulario de publicación sin perder la intención inicial.
+    - **Catálogo y peticiones**: Los estudiantes pueden explorar, filtrar y solicitar objetos indicando inicio, devolución y un mensaje para el propietario.
+    - **Ciclo del préstamo**: El propietario puede aprobar o rechazar solicitudes; solicitante y propietario pueden registrar la devolución.
+    - **Publicación inteligente**: Se pueden crear, editar, pausar, reactivar y eliminar publicaciones. Las fotos se guardan en Supabase Storage.
+    - **Alquiler demostrativo**: Una publicación puede definir precio y moneda (USD, EUR o VES). La solicitud registra un pago simulado, sin cobro real.
+    - **Publicación autenticada**: Si un usuario no autenticado intenta publicar o pedir, la aplicación lo lleva a `/login` y conserva la ruta pendiente.
 
 3. **Validación y Persistencia**:
    - Acceso institucional para estudiantes/profesores con validación `@ujap.edu.ve` y acceso administrativo separado que acepta Gmail, siempre que la cuenta tenga permisos de administrador.
-   - Creación y consulta de artículos mediante `GET/POST /api/items`; los datos ya no dependen de `localStorage`.
+    - Creación, edición, eliminación y consulta de artículos mediante `GET/POST/PATCH/DELETE /api/items`; los datos ya no dependen de `localStorage`.
+    - Solicitudes y préstamos mediante `GET /api/items?view=requests` y mutaciones con `resource: "request"`, sin superar el límite de funciones de Vercel.
    - Registro e inicio de sesión con Supabase Auth y sincronización del perfil mediante `GET/PATCH /api/me`.
-   - Fotos de perfil optimizadas en el navegador, persistidas como `photoUrl` y editables desde el perfil mediante drag & drop.
+    - Fotos de perfil optimizadas en el navegador y fotos de objetos almacenadas en el bucket `item-photos` de Supabase Storage.
    - Panel administrativo dividido por rutas: `/admin/roles`, `/admin/users`, `/admin/categories` y `/admin/careers`.
    - Pasos informativos marcables como "Leído" con persistencia reactiva.
 
@@ -110,7 +119,7 @@ El proyecto incluye `vercel.json` para compilar la aplicación Vite, servir `dis
 2. Configura en Vercel, para Preview y Production, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL`, `DIRECT_URL` y `APP_URL`.
 3. Deja `VITE_API_BASE_URL` vacío o sin definir: en Vercel el frontend y las funciones API comparten el mismo dominio.
 4. Mantén `ALLOW_TEST_EMAILS` y `VITE_ALLOW_TEST_EMAILS` en `false`. El build puede ejecutar `prisma generate` sin `DIRECT_URL`; esta variable sí es obligatoria cuando ejecutes migraciones.
-5. Ejecuta una vez `pnpm db:migrate:deploy` usando las credenciales de la base de datos de producción antes de probar la API.
+5. Ejecuta una vez `pnpm db:migrate:deploy` usando las credenciales de la base de datos de producción antes de probar la API. La migración crea modalidad/precio, vínculo de pagos y el bucket/policies de `item-photos`.
 6. En Supabase Auth, establece la URL del sitio y las URLs de redirección con el dominio de Vercel o el dominio personalizado; `APP_URL` debe apuntar a ese mismo origen.
 7. Comprueba `/`, `/login`, `/register`, `/admin/login` y `/api/health` después del primer despliegue.
 
@@ -121,7 +130,8 @@ Los roles y permisos son datos, no un enum fijo: viven en las tablas `Role`, `Pe
 - **STUDENT** y **PROFESSOR** (elegido al registrarse): `profile.update`, `items.publish`, `items.rent`, `reviews.create`.
 - **ADMIN**: todos los permisos, incluyendo `roles.manage`, `categories.manage`, `careers.manage`, `users.manage`. Puede entrar desde `/admin/login` con un correo como Gmail.
 - Las publicaciones quedan **disponibles de inmediato** al publicarse — no hay cola de revisión.
-- Al publicar un objeto se puede restringir su audiencia a uno o más roles (ej. "solo para profesores"); sin restricción, lo ve todo el campus.
+    - Al publicar un objeto se puede restringir su audiencia a uno o más roles (ej. "solo para profesores"); sin restricción, lo ve todo el campus.
+    - El pago de alquiler es **simulado** (`SIMULATED_PAID`); no se conecta todavía a una pasarela real.
 - Calificar a otro usuario (`reviews.create`) solo es posible después de que un préstamo (`Loan`) quede marcado como finalizado.
 
 Para probar con un admin: registra o crea su usuario en Supabase, asígnale el perfil correspondiente y ejecuta `pnpm db:promote admin@gmail.com ADMIN`. Luego entra desde `/admin/login`.
@@ -130,7 +140,6 @@ Para probar con un admin: registra o crea su usuario en Supabase, asígnale el p
 
 ## 🔮 Próximos Avances
 
-- **Unidad 4**: Solicitudes de préstamo, devoluciones y transacciones anti doble-préstamo.
-- **Unidad 5**: Subida de fotos a Supabase Storage y moderación de objetos.
-- **Unidad 6**: Reputación, QR de un solo uso y pagos simulados multimoneda.
+- **Unidad 6**: Integración de una pasarela real si el proyecto requiere cobros.
+- **Unidad 6**: Reputación, QR de un solo uso y moderación de objetos.
 - **Unidad 6**: Configuración formal de formateadores y linters (ESLint/Prettier) para estandarización de la calidad del código.

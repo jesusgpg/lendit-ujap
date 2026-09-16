@@ -1,14 +1,23 @@
+export type ItemMode = 'LOAN' | 'RENTAL'
+export type Currency = 'USD' | 'EUR' | 'VES'
+
 export interface Article {
   id: string
   code: string
   title: string
+  description?: string | null
+  photoUrl?: string | null
   category: string
   categoryKey: string
   categoryIcon: string | null
   duration: string
+  mode: ItemMode
+  price: number | null
+  currency: Currency | null
   status: 'available' | 'lent' | 'paused' | 'rejected'
   restrictedToRoles: string[]
   returnTime?: string
+  publishedAt?: string
 }
 
 export interface Category {
@@ -85,5 +94,74 @@ export interface NewArticleInput {
   title: string
   categoryKey: string
   duration: string
+  description?: string
+  photoUrl?: string
+  mode: ItemMode
+  price?: number
+  currency?: Currency
   restrictedToRoles: string[]
+}
+
+export interface UpdateArticleInput {
+  title?: string
+  categoryKey?: string
+  duration?: string
+  description?: string
+  photoUrl?: string | null
+  mode?: ItemMode
+  price?: number
+  currency?: Currency
+  status?: 'available' | 'paused'
+  restrictedToRoles?: string[]
+}
+
+export type LoanRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED'
+export type LoanStatus = 'ACTIVE' | 'RETURNED' | 'OVERDUE' | 'CANCELLED'
+export type PaymentStatus = 'PENDING' | 'SIMULATED_PAID' | 'FAILED' | 'REFUNDED'
+
+export interface LoanRequest {
+  id: string
+  item: {
+    id: string
+    code: string
+    title: string
+    category: string
+    categoryIcon: string | null
+    owner: {
+      id: string
+      name: string
+      email: string
+    }
+    mode: ItemMode
+    price: number | null
+    currency: Currency | null
+  }
+  requester: {
+    id: string
+    name: string
+    email: string
+  }
+  startsAt: string
+  endsAt: string
+  message: string | null
+  status: LoanRequestStatus
+  isOwner: boolean
+  payment: {
+    status: PaymentStatus
+    amount: number
+    currency: Currency
+  } | null
+  loan: {
+    id: string
+    status: LoanStatus
+    returnedAt: string | null
+  } | null
+  createdAt: string
+}
+
+export interface NewLoanRequestInput {
+  itemId: string
+  startsAt: string
+  endsAt: string
+  message?: string
 }
