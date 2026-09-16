@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 import { push } from 'notivue'
 import { useRoute, useRouter } from 'vue-router'

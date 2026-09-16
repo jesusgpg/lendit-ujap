@@ -12,6 +12,7 @@ import { useArticlesStore } from './articles'
 
 const article: Article = {
   id: 'item-1',
+  ownerId: 'user-1',
   code: '#UJAP-TEST',
   title: 'Calculadora',
   description: 'Para el parcial',
