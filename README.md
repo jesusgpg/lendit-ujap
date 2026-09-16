@@ -12,10 +12,11 @@ El proyecto está construido usando prácticas modernas de desarrollo web:
 
 - **Frontend**: [Vue 3](https://vuejs.org/) (Composition API, `<script setup>`) con [TypeScript](https://www.typescriptlang.org/)
 - **Estilos**: Vanilla CSS con un sistema premium de diseño adaptable y soporte nativo para **Modo Oscuro** (Theme auto-detectado).
-- **Manejador de Estado**: [Pinia](https://pinia.vuejs.org/) (para persistencia local del estado de autenticación y lista de artículos).
+- **Manejador de Estado**: [Pinia](https://pinia.vuejs.org/) para coordinar la sesión y datos remotos.
 - **Enrutado**: [Vue Router](https://router.vuejs.org/)
 - **Herramientas de Construcción**: [Vite](https://vite.dev/)
 - **Pruebas**: [Vitest](https://vitest.dev/) para pruebas unitarias.
+- **Backend**: funciones API de Vercel, [Supabase Auth](https://supabase.com/docs/guides/auth) y PostgreSQL con [Prisma](https://www.prisma.io/).
 
 ---
 
@@ -27,17 +28,26 @@ El código fuente está estructurado de manera modular y desacoplada, facilitand
 src/
 ├── types/         # Interfaces de TypeScript puras (Article, Category, AuthUser, etc.)
 ├── data/          # Datos simulados (mocks) y funciones auxiliares (independientes para fácil reemplazo por API)
-├── stores/        # Stores de Pinia (auth.ts y articles.ts con persistencia en localStorage)
+├── stores/        # Stores de Pinia conectados a Supabase y a la API
+├── lib/           # Cliente Supabase y cliente HTTP del frontend
 ├── router/        # Configuración de rutas (Vue Router)
 ├── components/    # Componentes de presentación reutilizables:
 │   ├── ArticleCard.vue         # Tarjeta de visualización de artículo disponible/prestado
 │   ├── CategoryCard.vue        # Tarjetas de categorías
 │   ├── StepCard.vue            # Tarjeta de pasos explicativos
 │   ├── ModalDialog.vue         # Diálogo modal premium adaptable
-│   ├── LoginForm.vue           # Formulario para inicio de sesión
-│   └── PublishArticleForm.vue  # Formulario para publicar nuevos objetos
+│   ├── AuthPageShell.vue       # Plantilla visual para las páginas de autenticación
+│   ├── LoginForm.vue           # Acceso institucional y administrativo reutilizable
+│   ├── RegisterForm.vue        # Registro con elección de rol (Estudiante/Profesor)
+│   ├── PhotoDropzone.vue       # Carga y optimización de fotos por arrastre
+│   ├── LoadingState.vue         # Loader visual reutilizable para paneles
+│   ├── PublishArticleForm.vue  # Formulario para publicar nuevos objetos (con audiencia por rol)
+│   └── RoleManagerPanel.vue    # Panel de administración de roles/permisos (solo ADMIN)
 ├── views/         # Vistas principales de la aplicación:
-│   └── LandingView.vue         # Vista principal (Landing page con todas las secciones)
+│   ├── LandingView.vue         # Vista principal (Landing page con todas las secciones)
+│   ├── AdminLoginView.vue      # Acceso separado para administradores
+│   ├── LoginView.vue           # Página de inicio de sesión comunitario
+│   └── RegisterView.vue        # Página de registro comunitario
 ├── App.vue        # Componente raíz
 └── main.ts        # Punto de entrada de la aplicación
 ```
@@ -53,11 +63,14 @@ src/
 
 2. **Flujo de Usuario Integrado**:
    - **Búsqueda y Peticiones**: Los estudiantes pueden ver objetos disponibles, solicitar préstamos (que genera una alerta simulada a su correo UJAP) o preguntar por artículos prestados.
-   - **Publicación Inteligente**: Si un usuario no autenticado intenta hacer clic en *"Publicar un objeto"*, la aplicación abre automáticamente el modal de inicio de sesión y, tras un ingreso exitoso, transiciona directamente al formulario de publicación sin perder la intención inicial.
+   - **Publicación Inteligente**: Si un usuario no autenticado intenta hacer clic en *"Publicar un objeto"*, la aplicación lo lleva a `/login` y, tras un ingreso exitoso, abre directamente el formulario de publicación sin perder la intención inicial.
 
 3. **Validación y Persistencia**:
-   - Validación local de correo institucional (`@ujap.edu.ve`) y contraseñas de al menos 6 caracteres.
-   - Creación y persistencia de artículos nuevos usando el almacenamiento local (`localStorage`) para mantener la lista actualizada al recargar la página.
+   - Acceso institucional para estudiantes/profesores con validación `@ujap.edu.ve` y acceso administrativo separado que acepta Gmail, siempre que la cuenta tenga permisos de administrador.
+   - Creación y consulta de artículos mediante `GET/POST /api/items`; los datos ya no dependen de `localStorage`.
+   - Registro e inicio de sesión con Supabase Auth y sincronización del perfil mediante `GET/PATCH /api/me`.
+   - Fotos de perfil optimizadas en el navegador, persistidas como `photoUrl` y editables desde el perfil mediante drag & drop.
+   - Panel administrativo dividido por rutas: `/admin/roles`, `/admin/users`, `/admin/categories` y `/admin/careers`.
    - Pasos informativos marcables como "Leído" con persistencia reactiva.
 
 ---
@@ -73,6 +86,9 @@ pnpm install
 # Servidor de desarrollo
 pnpm dev
 
+# Frontend + API local (server/dev-api.ts) juntos, sin depender de una cuenta de Vercel
+pnpm dev:full
+
 # Compilar el proyecto para producción (Type-check con vue-tsc + build)
 pnpm build
 
@@ -81,11 +97,40 @@ pnpm preview
 
 # Ejecutar pruebas unitarias de Vitest
 pnpm test
+
+# Cambiar el rol de un usuario ya registrado
+pnpm db:promote admin@gmail.com ADMIN
 ```
+
+### Despliegue en Vercel
+
+El proyecto incluye `vercel.json` para compilar la aplicación Vite, servir `dist` y permitir recargar directamente cualquier ruta de Vue Router. Las funciones de `api/` son detectadas automáticamente por Vercel.
+
+1. Importa el repositorio en Vercel usando la raíz del proyecto. El comando de build es `pnpm build`.
+2. Configura en Vercel, para Preview y Production, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL`, `DIRECT_URL` y `APP_URL`.
+3. Deja `VITE_API_BASE_URL` vacío o sin definir: en Vercel el frontend y las funciones API comparten el mismo dominio.
+4. Mantén `ALLOW_TEST_EMAILS` y `VITE_ALLOW_TEST_EMAILS` en `false`. `DIRECT_URL` debe estar disponible durante la instalación porque `postinstall` ejecuta `prisma generate`.
+5. Ejecuta una vez `pnpm db:migrate:deploy` usando las credenciales de la base de datos de producción antes de probar la API.
+6. En Supabase Auth, establece la URL del sitio y las URLs de redirección con el dominio de Vercel o el dominio personalizado; `APP_URL` debe apuntar a ese mismo origen.
+7. Comprueba `/`, `/login`, `/register`, `/admin/login` y `/api/health` después del primer despliegue.
+
+### Roles y permisos
+
+Los roles y permisos son datos, no un enum fijo: viven en las tablas `Role`, `Permission` y `RolePermission`. Un `ADMIN` puede crear roles nuevos y activar/desactivar permisos por rol desde el panel "Roles y permisos" que aparece en la landing al iniciar sesión como admin (requiere el permiso `roles.manage`).
+
+- **STUDENT** y **PROFESSOR** (elegido al registrarse): `profile.update`, `items.publish`, `items.rent`, `reviews.create`.
+- **ADMIN**: todos los permisos, incluyendo `roles.manage`, `categories.manage`, `careers.manage`, `users.manage`. Puede entrar desde `/admin/login` con un correo como Gmail.
+- Las publicaciones quedan **disponibles de inmediato** al publicarse — no hay cola de revisión.
+- Al publicar un objeto se puede restringir su audiencia a uno o más roles (ej. "solo para profesores"); sin restricción, lo ve todo el campus.
+- Calificar a otro usuario (`reviews.create`) solo es posible después de que un préstamo (`Loan`) quede marcado como finalizado.
+
+Para probar con un admin: registra o crea su usuario en Supabase, asígnale el perfil correspondiente y ejecuta `pnpm db:promote admin@gmail.com ADMIN`. Luego entra desde `/admin/login`.
 
 ---
 
 ## 🔮 Próximos Avances
 
-- **Unidad 4**: Integración de API HTTP real y base de datos para sustituir las funciones mock de la carpeta `src/data/`.
+- **Unidad 4**: Solicitudes de préstamo, devoluciones y transacciones anti doble-préstamo.
+- **Unidad 5**: Subida de fotos a Supabase Storage y moderación de objetos.
+- **Unidad 6**: Reputación, QR de un solo uso y pagos simulados multimoneda.
 - **Unidad 6**: Configuración formal de formateadores y linters (ESLint/Prettier) para estandarización de la calidad del código.

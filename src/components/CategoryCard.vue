@@ -21,10 +21,10 @@ defineEmits<{
     <h3>Y lo que falte</h3>
     <p>Libros, batas de laboratorio, instrumentos… si es tuyo y se puede prestar, tiene un lugar aquí.</p>
   </li>
-  <li 
-    v-else-if="category" 
+  <li
+    v-else-if="category"
     class="category-card"
-    @click="$emit('select', category.id)"
+    @click="$emit('select', category.key)"
   >
     <span class="category-card__icon">{{ category.icon }}</span>
     <h3>{{ category.label }}</h3>

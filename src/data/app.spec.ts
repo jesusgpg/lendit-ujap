@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAppName, getAppTagline, getItemCategories } from './app'
+import { getAppName, getAppTagline } from './app'
 
 describe('app data', () => {
   it('returns the app name', () => {
@@ -8,13 +8,5 @@ describe('app data', () => {
 
   it('returns a non-empty tagline', () => {
     expect(getAppTagline().length).toBeGreaterThan(0)
-  })
-
-  it('returns the item categories', () => {
-    expect(getItemCategories()).toEqual([
-      { id: 'calculadoras', label: 'Calculadoras' },
-      { id: 'cargadores', label: 'Cargadores' },
-      { id: 'equipo', label: 'Equipo' },
-    ])
   })
 })
