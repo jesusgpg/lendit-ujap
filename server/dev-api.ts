@@ -15,6 +15,7 @@ import permissionsHandler from '../api/permissions.ts'
 import usersHandler from '../api/users.ts'
 import userDetailHandler from '../api/users/[id].ts'
 import userResetPasswordHandler from '../api/users/[id]/reset-password.ts'
+import simpleArticlesHandler from '../api/simple/articles.ts'
 
 const app = express()
 app.use(express.json())
@@ -55,6 +56,8 @@ app.all('/api/permissions', wrap(permissionsHandler))
 app.all('/api/users', wrap(usersHandler))
 app.all('/api/users/:id/reset-password', withParamsAsQuery(userResetPasswordHandler))
 app.all('/api/users/:id', withParamsAsQuery(userDetailHandler))
+app.all('/api/simple/articles', wrap(simpleArticlesHandler))
+app.all('/api/simple/articles/:id', withParamsAsQuery(simpleArticlesHandler))
 
 const port = Number(process.env.DEV_API_PORT ?? 8787)
 app.listen(port, () => {
