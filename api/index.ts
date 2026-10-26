@@ -8,7 +8,7 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
   const route = url.searchParams.get('__apiPath')
   if (route !== null) {
     url.searchParams.delete('__apiPath')
-    req.url = `/api/${route}${url.search}`
+    req.url = `/api/${route.replace(/^\/+/, '')}${url.search}`
   }
   return app(req, res)
 }

@@ -1,24 +1,24 @@
 import express, { type Request, type Response } from 'express'
 import type { ApiRequest, ApiResponse } from '../backend/_lib/auth.js'
-import healthHandler from '../backend/health.ts'
-import itemsHandler from '../backend/items.ts'
-import meHandler from '../backend/me.ts'
-import categoriesHandler from '../backend/categories.ts'
-import careersHandler from '../backend/careers.ts'
-import schoolsHandler from '../backend/schools.ts'
-import rolesHandler from '../backend/roles.ts'
-import roleDetailHandler from '../backend/roles/[id].ts'
-import permissionsHandler from '../backend/permissions.ts'
-import usersHandler from '../backend/users.ts'
-import userDetailHandler from '../backend/users/[id].ts'
-import userResetPasswordHandler from '../backend/users/[id]/reset-password.ts'
-import messagesHandler from '../backend/messages.ts'
-import paymentsHandler from '../backend/payments.ts'
-import teacherVerificationMeHandler from '../backend/teacher-verifications/me.ts'
-import teacherVerificationMeCredentialHandler from '../backend/teacher-verifications/me/credential.ts'
-import teacherVerificationsAdminHandler from '../backend/admin/teacher-verifications.ts'
-import teacherVerificationDetailHandler from '../backend/admin/teacher-verifications/[id].ts'
-import teacherVerificationDecisionHandler from '../backend/admin/teacher-verifications/[id]/decision.ts'
+import healthHandler from '../backend/health.js'
+import itemsHandler from '../backend/items.js'
+import meHandler from '../backend/me.js'
+import categoriesHandler from '../backend/categories.js'
+import careersHandler from '../backend/careers.js'
+import schoolsHandler from '../backend/schools.js'
+import rolesHandler from '../backend/roles.js'
+import roleDetailHandler from '../backend/roles/[id].js'
+import permissionsHandler from '../backend/permissions.js'
+import usersHandler from '../backend/users.js'
+import userDetailHandler from '../backend/users/[id].js'
+import userResetPasswordHandler from '../backend/users/[id]/reset-password.js'
+import messagesHandler from '../backend/messages.js'
+import paymentsHandler from '../backend/payments.js'
+import teacherVerificationMeHandler from '../backend/teacher-verifications/me.js'
+import teacherVerificationMeCredentialHandler from '../backend/teacher-verifications/me/credential.js'
+import teacherVerificationsAdminHandler from '../backend/admin/teacher-verifications.js'
+import teacherVerificationDetailHandler from '../backend/admin/teacher-verifications/[id].js'
+import teacherVerificationDecisionHandler from '../backend/admin/teacher-verifications/[id]/decision.js'
 
 const app = express()
 app.set('query parser', 'simple')
@@ -31,12 +31,16 @@ type Handler = (req: HandlerRequest, res: ApiResponse) => unknown
 
 function wrap(handler: Handler, mergeParams = false) {
   return async (req: Request, res: Response) => {
+    // Keep the small handler contract independent of Express's declaration
+    // resolution in Vercel's per-function TypeScript compiler.
+    const request = req as unknown as HandlerRequest & { params: Record<string, string> }
+    const response = res as unknown as ApiResponse
     try {
-      const query = { ...req.query, ...(mergeParams ? req.params : {}) } as HandlerRequest['query']
-      await handler({ method: req.method, headers: req.headers, body: req.body, query }, res)
+      const query = { ...request.query, ...(mergeParams ? request.params : {}) } as HandlerRequest['query']
+      await handler({ method: request.method, headers: request.headers, body: request.body, query }, response)
     } catch (error) {
       console.error('Unhandled API error', error)
-      res.status(500).json({ ok: false, error: 'INTERNAL_ERROR' })
+      response.status(500).json({ ok: false, error: 'INTERNAL_ERROR' })
     }
   }
 }
