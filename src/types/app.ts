@@ -8,6 +8,7 @@ export interface Article {
   title: string
   description?: string | null
   photoUrl?: string | null
+  photoUrls?: string[]
   category: string
   categoryKey: string
   categoryIcon: string | null
@@ -26,17 +27,28 @@ export interface Category {
   label: string
   icon: string | null
   blurb: string | null
+  imagenUrl: string | null
+  imagenAlt: string | null
+  unsplashPhotoId: string | null
+  photographerName: string | null
+  photographerUrl: string | null
+  unsplashUrl: string | null
 }
 
 export interface School {
+  careerCount?: number
   id: string
   name: string
+  imagenUrl?: string | null
+  imagenAlt?: string | null
 }
 
 export interface Career {
   id: string
   name: string
   school: School | null
+  imagenUrl?: string | null
+  imagenAlt?: string | null
 }
 
 export interface Role {
@@ -57,19 +69,70 @@ export interface TrustPoint {
   text: string
 }
 
+export type TeacherVerificationStatus = 'DRAFT' | 'PENDING' | 'NEEDS_CORRECTION' | 'REJECTED' | 'APPROVED'
+export type TeacherDecisionAction = 'APPROVE' | 'REJECT' | 'REQUEST_CORRECTION'
+
+export interface TeacherVerificationDecision {
+  id: string
+  action: TeacherDecisionAction
+  reason: string | null
+  adminName: string
+  version: number
+  createdAt: string
+}
+
+export interface TeacherVerification {
+  id: string
+  userId?: string
+  applicant?: {
+    id: string
+    name: string
+    email: string
+    phone: string
+    role: string
+  }
+  user?: {
+    id: string
+    name: string
+    email: string
+    phone: string
+    photo?: string | null
+    currentRole: string
+  }
+  schoolId: string
+  schoolName?: string
+  school?: { id: string; name: string }
+  department: string | null
+  careerId: string | null
+  careerName?: string | null
+  career?: { id: string; name: string } | null
+  documentPath: string | null
+  signedUrl?: string | null
+  status: TeacherVerificationStatus
+  version: number
+  rejectionReason: string | null
+  createdAt: string
+  updatedAt: string
+  decisions?: TeacherVerificationDecision[]
+}
+
 export interface AuthUser {
   id: string
   name: string
   firstName: string
   lastName: string
   email: string
-  career: string
-  careerId: string
+  career?: string | null
+  careerId?: string | null
+  school?: string | null
+  schoolId?: string | null
+  department?: string | null
   phone: string
   photo: string
   role: string
   permissions: string[]
   emailVerifiedAt?: string | null
+  teacherVerification?: TeacherVerification | null
 }
 
 export type LoginMode = 'institutional' | 'admin'
@@ -85,8 +148,10 @@ export interface RegisterInput {
   lastName: string
   email: string
   password: string
-  careerId: string
   role: 'STUDENT' | 'PROFESSOR'
+  careerId?: string
+  schoolId?: string
+  department?: string
   phone: string
   photo: string | null
 }
@@ -97,6 +162,7 @@ export interface NewArticleInput {
   duration: string
   description?: string
   photoUrl?: string
+  photoUrls?: string[]
   mode: ItemMode
   price?: number
   currency?: Currency
@@ -109,6 +175,7 @@ export interface UpdateArticleInput {
   duration?: string
   description?: string
   photoUrl?: string | null
+  photoUrls?: string[]
   mode?: ItemMode
   price?: number
   currency?: Currency
@@ -148,9 +215,12 @@ export interface LoanRequest {
   status: LoanRequestStatus
   isOwner: boolean
   payment: {
+    id?: string
     status: PaymentStatus
     amount: number
     currency: Currency
+    provider?: string | null
+    providerReference?: string | null
   } | null
   loan: {
     id: string
@@ -165,4 +235,59 @@ export interface NewLoanRequestInput {
   startsAt: string
   endsAt: string
   message?: string
+}
+
+
+export interface ChatMessage {
+  id: string
+  requestId: string | null
+  conversationId?: string | null
+  senderId: string
+  content: string
+  createdAt: string
+}
+
+export interface MessagesResponse {
+  ok: boolean
+  messages: ChatMessage[]
+  nextCursor?: string | null
+}
+
+export interface MessageThread {
+  id: string
+  kind: 'request' | 'inquiry'
+  item: { id: string; title: string; photoUrl: string | null }
+  counterpart: { id: string; name: string; photo: string | null }
+  status: string
+  canSend: boolean
+  latestMessage: { senderId: string; content: string; createdAt: string } | null
+  updatedAt: string
+}
+
+export interface SendMessageResponse {
+  ok: boolean
+  message: ChatMessage
+}
+
+
+export type FakePaymentMethod = 'campus_balance' | 'fake_card' | 'fake_mobile_pay'
+export type SimulationOutcome = 'success' | 'failure'
+
+export interface SimulatePaymentPayload {
+  requestId: string
+  outcome: SimulationOutcome
+  paymentMethod?: FakePaymentMethod
+}
+
+export interface PaymentRecord {
+  id: string
+  requestId: string
+  userId: string
+  amount: number
+  currency: Currency
+  status: PaymentStatus
+  provider: string | null
+  providerReference: string | null
+  createdAt?: string
+  updatedAt?: string
 }

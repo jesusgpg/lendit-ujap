@@ -23,7 +23,7 @@ function handleLoginSuccess() {
 }
 
 onMounted(() => {
-  if (authStore.hasPermission('roles.manage')) {
+  if (['roles.manage', 'users.manage', 'categories.manage', 'careers.manage'].some((permission) => authStore.hasPermission(permission))) {
     void router.replace({ name: 'admin' })
   }
 })
@@ -32,9 +32,9 @@ onMounted(() => {
 <template>
   <AuthPageShell
     eyebrow="Zona restringida / LendIt"
-    title="El campus también necesita un centro de control."
+    title="Administración de LendIt."
     description="Gestiona usuarios, permisos, carreras y categorías desde un espacio separado del acceso de la comunidad."
-    note="El correo puede ser Gmail, pero la cuenta debe tener permisos de administrador."
+    note="Este acceso requiere una cuenta con permisos de administración."
     card-kicker="Administración"
     card-title="Iniciar sesión"
     card-label="Formulario de acceso administrativo"

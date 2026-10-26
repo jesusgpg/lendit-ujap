@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { push } from 'notivue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 import PublishArticleForm from '../components/PublishArticleForm.vue'
 import SiteFooter from '../components/SiteFooter.vue'
 import SiteHeader from '../components/SiteHeader.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 function handlePublished() {
   push.success({ title: 'Objeto publicado', message: 'Tu objeto ya está disponible para el campus.' })
@@ -17,16 +19,18 @@ function handlePublished() {
   <div class="publish-page">
     <SiteHeader show-marketplace-nav />
 
-    <main class="publish-layout">
+    <main id="main-content" class="publish-layout">
       <section class="publish-intro" aria-labelledby="publish-title">
         <router-link class="back-link" to="/catalogo">← Volver al catálogo</router-link>
         <p class="publish-intro__eyebrow">Nueva publicación · LendIt UJAP</p>
-        <h1 id="publish-title">Haz que algo útil vuelva a circular.</h1>
+        <h1 id="publish-title">Comparte algo útil para el campus.</h1>
         <p class="publish-intro__description">
           Una buena publicación dice lo necesario: qué es, en qué estado está y durante cuánto tiempo puede ayudar a
           otra persona.
         </p>
 
+        <details class="publish-guide">
+          <summary>Consejos para una buena publicación</summary>
         <ol class="publish-steps">
           <li>
             <span>01</span>
@@ -52,18 +56,31 @@ function handlePublished() {
         </ol>
 
         <p class="publish-intro__note">
-          Esta primera versión coordina préstamos entre miembros de la UJAP. El alquiler con cobro requiere agregar
-          monto, moneda y un flujo de pagos.
+          Puedes ofrecer un préstamo gratuito o definir una tarifa de alquiler. Los pagos del proyecto son simulados y no realizan cobros reales.
         </p>
+        </details>
       </section>
 
-      <section class="publish-panel" aria-label="Formulario para publicar un objeto">
+      <section v-if="authStore.isTeacherApplicant" class="publish-panel" aria-label="Acreditación docente requerida">
+        <div class="publish-panel__topline">
+          <span>Acreditación docente</span>
+          <span>Operación suspendida</span>
+        </div>
+        <h2>Acreditación en revisión</h2>
+        <p class="publish-panel__hint">
+          Tu cuenta docente se encuentra en proceso de validación. La publicación de objetos en el marketplace estará disponible tan pronto como la administración apruebe tu credencial institucional.
+        </p>
+        <router-link to="/cuenta/acreditacion" class="btn btn--primary" style="display: inline-block; text-decoration: none;">
+          Consultar estado de acreditación ↗
+        </router-link>
+      </section>
+
+      <section v-else class="publish-panel" aria-label="Formulario para publicar un objeto">
         <div class="publish-panel__topline">
           <span>Ficha de objeto</span>
           <span>Se publica al guardar</span>
         </div>
         <h2>Cuéntale al campus qué tienes.</h2>
-        <p class="publish-panel__hint">Los campos marcados son suficientes para que tu publicación aparezca hoy.</p>
         <PublishArticleForm @published="handlePublished" />
       </section>
     </main>

@@ -119,12 +119,12 @@ async function confirmDelete() {
   <div class="my-page">
     <SiteHeader show-marketplace-nav />
 
-    <main class="my-content">
+    <main id="main-content" class="my-content">
       <header class="my-masthead">
         <div>
           <router-link class="back-link" to="/catalogo">← Explorar objetos</router-link>
           <p class="my-masthead__eyebrow">Tu estante · LendIt UJAP</p>
-          <h1>Lo que has puesto a circular.</h1>
+          <h1>Mis publicaciones.</h1>
           <p>Administra la disponibilidad de tus objetos desde un solo lugar.</p>
         </div>
         <router-link class="btn btn--primary" to="/publicar">+ Nueva publicación</router-link>
@@ -475,6 +475,14 @@ async function confirmDelete() {
   font-size: 12px;
 }
 
+.publication-status {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-weight: 550;
+}
+
 .publication-status span {
   width: 7px;
   height: 7px;
@@ -483,7 +491,9 @@ async function confirmDelete() {
 }
 
 .publication-status--available {
-  color: var(--gold);
+  color: var(--ink);
+  background: var(--gold-bg);
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--line));
 }
 
 .publication-status--available span {
@@ -492,6 +502,8 @@ async function confirmDelete() {
 
 .publication-status--paused {
   color: var(--crimson-dark);
+  background: var(--crimson-bg);
+  border-color: color-mix(in srgb, var(--crimson) 35%, var(--line));
 }
 
 .publication-status--paused span {
@@ -511,24 +523,36 @@ async function confirmDelete() {
 }
 
 .publication-row__action {
-  padding: 9px 13px;
+  padding: 8px 14px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: transparent;
+  background: var(--paper);
   color: var(--ink-soft);
-  font: 600 12px var(--sans);
+  font: 600 12.5px var(--sans);
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .publication-row__action:hover:not(:disabled) {
-  border-color: var(--crimson);
-  background: var(--crimson);
+  border-color: var(--navy);
+  background: var(--navy);
   color: var(--on-dark);
+  transform: translateY(-1px);
+}
+
+.publication-row__action:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .publication-row__action--danger {
   color: var(--crimson-dark);
+  border-color: color-mix(in srgb, var(--crimson) 35%, var(--line-strong));
+}
+
+.publication-row__action--danger:hover:not(:disabled) {
+  border-color: var(--crimson);
+  background: var(--crimson);
+  color: var(--on-dark);
 }
 
 .publication-row__action:disabled {

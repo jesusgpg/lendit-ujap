@@ -15,6 +15,13 @@ import permissionsHandler from '../api/permissions.ts'
 import usersHandler from '../api/users.ts'
 import userDetailHandler from '../api/users/[id].ts'
 import userResetPasswordHandler from '../api/users/[id]/reset-password.ts'
+import messagesHandler from '../api/messages.ts'
+import paymentsHandler from '../api/payments.ts'
+import teacherVerificationMeHandler from '../api/teacher-verifications/me.ts'
+import teacherVerificationMeCredentialHandler from '../api/teacher-verifications/me/credential.ts'
+import teacherVerificationsAdminHandler from '../api/admin/teacher-verifications.ts'
+import teacherVerificationDetailHandler from '../api/admin/teacher-verifications/[id].ts'
+import teacherVerificationDecisionHandler from '../api/admin/teacher-verifications/[id]/decision.ts'
 
 const app = express()
 app.use(express.json())
@@ -49,12 +56,20 @@ app.all('/api/categories/:key', withParamsAsQuery(categoriesHandler))
 app.all('/api/careers', wrap(careersHandler))
 app.all('/api/careers/:id', withParamsAsQuery(careersHandler))
 app.all('/api/schools', wrap(schoolsHandler))
+app.all('/api/schools/:id', withParamsAsQuery(schoolsHandler))
 app.all('/api/roles', wrap(rolesHandler))
 app.all('/api/roles/:id', withParamsAsQuery(roleDetailHandler))
 app.all('/api/permissions', wrap(permissionsHandler))
 app.all('/api/users', wrap(usersHandler))
 app.all('/api/users/:id/reset-password', withParamsAsQuery(userResetPasswordHandler))
 app.all('/api/users/:id', withParamsAsQuery(userDetailHandler))
+app.all('/api/messages', wrap(messagesHandler))
+app.all('/api/payments', wrap(paymentsHandler))
+app.all('/api/teacher-verifications/me/credential', wrap(teacherVerificationMeCredentialHandler))
+app.all('/api/teacher-verifications/me', wrap(teacherVerificationMeHandler))
+app.all('/api/admin/teacher-verifications/:id/decision', withParamsAsQuery(teacherVerificationDecisionHandler))
+app.all('/api/admin/teacher-verifications/:id', withParamsAsQuery(teacherVerificationDetailHandler))
+app.all('/api/admin/teacher-verifications', wrap(teacherVerificationsAdminHandler))
 
 const port = Number(process.env.DEV_API_PORT ?? 8787)
 app.listen(port, () => {

@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { push } from 'notivue'
 import type { Article } from '../types'
 import { useRequestsStore } from '../stores/requests'
+import ItemPhotoGallery from './ItemPhotoGallery.vue'
 
 defineProps<{
   article: Article
@@ -63,7 +64,7 @@ async function submit(article: Article) {
       title: 'Solicitud enviada',
       message:
         article.mode === 'RENTAL'
-          ? 'El pago simulado quedó registrado y el propietario debe aprobar la solicitud.'
+          ? 'Solicitud creada con éxito. Deberás completar el pago simulado desde Solicitudes para que el propietario pueda aprobarla.'
           : 'El propietario debe aprobar la solicitud antes de entregarte el objeto.',
     })
     emit('submitted')
@@ -78,8 +79,14 @@ async function submit(article: Article) {
 <template>
   <form class="request-form" @submit.prevent="submit(article)">
     <div class="request-form__item">
-      <span class="request-form__icon">{{ article.categoryIcon || '·' }}</span>
-      <div>
+      <ItemPhotoGallery
+        class="request-form__gallery"
+        :photo-urls="article.photoUrls"
+        :photo-url="article.photoUrl"
+        :title="article.title"
+        :category-icon="article.categoryIcon"
+      />
+      <div class="request-form__item-details">
         <strong>{{ article.title }}</strong>
         <span>{{ article.category }} · {{ formatOffer(article) }}</span>
       </div>
@@ -108,12 +115,20 @@ async function submit(article: Article) {
 
     <div v-if="article.mode === 'RENTAL'" class="payment-note">
       <span class="payment-note__mark">₿</span>
-      <p><strong>Pago simulado</strong> · Se registrará {{ formatOffer(article) }} sin realizar un cobro real.</p>
+      <p>
+        <strong>Solicitud con pago simulado</strong> · Primero se crea tu solicitud por {{ formatOffer(article) }}. Luego deberás completar el pago simulado desde <strong>Solicitudes</strong> (sin cobro real) para que el propietario pueda aceptarla.
+      </p>
     </div>
 
     <p v-if="errorMessage" class="request-form__error">{{ errorMessage }}</p>
     <button class="btn btn--primary" type="submit" :disabled="isSubmitting">
-      {{ isSubmitting ? 'Enviando…' : article.mode === 'RENTAL' ? 'Pagar y solicitar' : 'Enviar solicitud' }}
+      {{
+        isSubmitting
+          ? 'Enviando…'
+          : article.mode === 'RENTAL'
+            ? 'Crear solicitud (pagar luego en Solicitudes)'
+            : 'Enviar solicitud'
+      }}
     </button>
   </form>
 </template>
@@ -127,7 +142,7 @@ async function submit(article: Article) {
 
 .request-form__item {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
   padding: 13px;
   border-radius: 12px;
@@ -135,29 +150,24 @@ async function submit(article: Article) {
   border: 1px solid var(--line);
 }
 
-.request-form__icon {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 10px 10px 10px 2px;
-  background: var(--crimson-bg);
-  font-size: 21px;
+.request-form__gallery {
+  height: 170px;
+  border-radius: 9px;
 }
 
-.request-form__item div {
+.request-form__item-details {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.request-form__item strong {
+.request-form__item-details strong {
   color: var(--ink);
   font-family: var(--display);
   font-size: 19px;
 }
 
-.request-form__item div span {
+.request-form__item-details span {
   color: var(--ink-faint);
   font-size: 12px;
 }
@@ -250,6 +260,9 @@ async function submit(article: Article) {
 @media (max-width: 430px) {
   .request-form__dates {
     grid-template-columns: 1fr;
+  }
+  .request-form__gallery {
+    height: 140px;
   }
 }
 </style>

@@ -47,6 +47,20 @@ enum Currency {
   VES
 }
 
+enum TeacherVerificationStatus {
+  DRAFT
+  PENDING
+  NEEDS_CORRECTION
+  REJECTED
+  APPROVED
+}
+
+enum TeacherDecisionAction {
+  APPROVE
+  REJECT
+  REQUEST_CORRECTION
+}
+
 // Roles administrables: el admin puede crear roles nuevos y asignarles permisos
 // sin tocar código (ver Permission / RolePermission).
 model Role {
@@ -81,17 +95,26 @@ model RolePermission {
 }
 
 model School {
-  id      String   @id @default(uuid()) @db.Uuid
-  name    String   @unique @db.VarChar(120)
-  careers Career[]
+  id                   String                @id @default(uuid()) @db.Uuid
+  name                 String                @unique @db.VarChar(120)
+  careers              Career[]
+  users                User[]
+  teacherVerifications TeacherVerification[]
+  teacherSubmissions   TeacherCredentialSubmission[]
+  imagenUrl            String?               @db.VarChar(255)
+  imagenAlt            String?               @db.VarChar(255)
 }
 
 model Career {
-  id       String  @id @default(uuid()) @db.Uuid
-  name     String  @unique @db.VarChar(120)
-  schoolId String? @db.Uuid
-  school   School? @relation(fields: [schoolId], references: [id], onDelete: SetNull)
-  users    User[]
+  id                   String                @id @default(uuid()) @db.Uuid
+  name                 String                @unique @db.VarChar(120)
+  schoolId             String?               @db.Uuid
+  school               School?               @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  users                User[]
+  teacherVerifications TeacherVerification[]
+  teacherSubmissions   TeacherCredentialSubmission[]
+  imagenUrl            String?               @db.VarChar(255)
+  imagenAlt            String?               @db.VarChar(255)
 
   @@index([schoolId])
 }
@@ -102,40 +125,116 @@ model Category {
   label String  @db.VarChar(80)
   icon  String? @db.VarChar(8)
   blurb String?
+  imagenUrl String?
+  imagenAlt String?
+  unsplashPhotoId String? @db.VarChar(100)
+  photographerName String?
+  photographerUrl String?
+  unsplashUrl String?
+  unsplashDownloadLocation String?
+  unsplashDownloadTrackedAt DateTime?
   items Item[]
 }
 
 // Las credenciales y la verificación del correo viven en Supabase Auth.
 // Esta tabla contiene el perfil y el dominio de negocio de LendIt.
 model User {
-  id                     String             @id @default(uuid()) @db.Uuid
-  authUserId             String?            @unique @db.Uuid
-  email                  String             @unique @db.VarChar(254)
-  firstName              String             @db.VarChar(80)
-  lastName               String             @db.VarChar(80)
-  roleId                 String             @db.Uuid
-  careerId               String             @db.Uuid
-  isActive               Boolean            @default(true)
-  phone                  String             @db.VarChar(30)
+  id                     String                        @id @default(uuid()) @db.Uuid
+  authUserId             String?                       @unique @db.Uuid
+  email                  String                        @unique @db.VarChar(254)
+  firstName              String                        @db.VarChar(80)
+  lastName               String                        @db.VarChar(80)
+  roleId                 String                        @db.Uuid
+  schoolId               String?                       @db.Uuid
+  department             String?                       @db.VarChar(120)
+  careerId               String?                       @db.Uuid
+  isActive               Boolean                       @default(true)
+  phone                  String                        @db.VarChar(30)
   photoUrl               String?
   emailVerifiedAt        DateTime?
-  reliabilityScore       Decimal            @default(0) @db.Decimal(5, 2)
-  reliabilityReviewCount Int                @default(0)
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
-  role                   Role               @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  career                 Career             @relation(fields: [careerId], references: [id], onDelete: Restrict)
-  items                  Item[]             @relation("ItemOwner")
-  loanRequests           LoanRequest[]      @relation("LoanRequester")
-  borrowedLoans          Loan[]             @relation("LoanBorrower")
-  ownedLoans             Loan[]             @relation("LoanOwner")
-  reviewsWritten         Review[]           @relation("ReviewAuthor")
-  reviewsReceived        Review[]           @relation("ReviewTarget")
+  reliabilityScore       Decimal                       @default(0) @db.Decimal(5, 2)
+  reliabilityReviewCount Int                           @default(0)
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+  role                   Role                          @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  school                 School?                       @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  career                 Career?                       @relation(fields: [careerId], references: [id], onDelete: SetNull)
+  items                  Item[]                        @relation("ItemOwner")
+  loanRequests           LoanRequest[]                 @relation("LoanRequester")
+  borrowedLoans          Loan[]                        @relation("LoanBorrower")
+  ownedLoans             Loan[]                        @relation("LoanOwner")
+  reviewsWritten         Review[]                      @relation("ReviewAuthor")
+  reviewsReceived        Review[]                      @relation("ReviewTarget")
   payments               Payment[]
   qrChallenges           QrLoginChallenge[]
+  chatMessages           ChatMessage[]
+  itemConversations      ItemConversation[]
+  teacherVerification    TeacherVerification?
+  teacherDecisions       TeacherVerificationDecision[] @relation("AdminDecisions")
 
   @@index([roleId])
+  @@index([schoolId])
   @@index([emailVerifiedAt])
+}
+
+model TeacherVerification {
+  id              String                        @id @default(uuid()) @db.Uuid
+  userId          String                        @unique @db.Uuid
+  schoolId        String                        @db.Uuid
+  department      String?                       @db.VarChar(120)
+  careerId        String?                       @db.Uuid
+  documentPath     String?                       @db.VarChar(255)
+  status           TeacherVerificationStatus     @default(DRAFT)
+  version          Int                           @default(1)
+  // Versión de la instantánea enviada que está en revisión o aprobada (null sin envíos).
+  submittedVersion Int?
+  rejectionReason  String?
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+  user             User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school           School                        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  career           Career?                       @relation(fields: [careerId], references: [id], onDelete: SetNull)
+  decisions        TeacherVerificationDecision[]
+  submissions      TeacherCredentialSubmission[]
+
+  @@index([status])
+  @@index([schoolId])
+}
+
+// Instantánea inmutable de cada envío a revisión: datos académicos y documento exacto revisado.
+model TeacherCredentialSubmission {
+  id             String              @id @default(uuid()) @db.Uuid
+  verificationId String              @db.Uuid
+  version        Int
+  schoolId       String              @db.Uuid
+  department     String?             @db.VarChar(120)
+  careerId       String?             @db.Uuid
+  documentPath   String              @db.VarChar(255)
+  documentMime   String              @db.VarChar(40)
+  documentBytes  Int
+  documentSha256 String              @db.Char(64)
+  submittedAt    DateTime            @default(now())
+  verification   TeacherVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  school         School              @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  career         Career?             @relation(fields: [careerId], references: [id], onDelete: SetNull)
+
+  @@unique([verificationId, version])
+  @@index([documentPath])
+}
+
+model TeacherVerificationDecision {
+  id             String                @id @default(uuid()) @db.Uuid
+  verificationId String                @db.Uuid
+  adminId        String                @db.Uuid
+  action         TeacherDecisionAction
+  reason         String?
+  version        Int
+  createdAt      DateTime              @default(now())
+  verification   TeacherVerification   @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  admin          User                  @relation("AdminDecisions", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([verificationId, createdAt])
+  @@index([adminId])
 }
 
 model Item {
@@ -147,6 +246,7 @@ model Item {
   categoryId      String            @db.Uuid
   duration        String?           @db.VarChar(80)
   photoUrl        String?
+  photoUrls       String[]          @default([])
   mode            ItemMode          @default(LOAN)
   price           Decimal?          @db.Decimal(12, 2)
   currency        Currency?
@@ -161,6 +261,7 @@ model Item {
   // Vacío = visible/alquilable por cualquier rol. Con filas = restringido a esos roles
   // (ej. "solo para profesores").
   visibleToRoles  ItemVisibility[]
+  conversations  ItemConversation[]
 
   @@index([ownerId, status])
   @@index([categoryId, status])
@@ -189,6 +290,7 @@ model LoanRequest {
   requester   User              @relation("LoanRequester", fields: [requesterId], references: [id], onDelete: Restrict)
   loan        Loan?
   payment     Payment?
+  chatMessages ChatMessage[]
 
   @@index([itemId, status])
   @@index([requesterId, status])
@@ -268,4 +370,32 @@ model QrLoginChallenge {
 
   @@index([expiresAt])
   @@index([userId, consumedAt])
+}
+
+model ItemConversation {
+  id          String        @id @default(uuid()) @db.Uuid
+  itemId      String        @db.Uuid
+  requesterId String        @db.Uuid
+  createdAt   DateTime      @default(now())
+  item        Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  requester   User          @relation(fields: [requesterId], references: [id], onDelete: Restrict)
+  messages    ChatMessage[]
+
+  @@unique([itemId, requesterId])
+  @@index([requesterId])
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid()) @db.Uuid
+  requestId String?     @db.Uuid
+  conversationId String? @db.Uuid
+  senderId  String      @db.Uuid
+  content   String      @db.VarChar(2000)
+  createdAt DateTime    @default(now())
+  request   LoanRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  conversation ItemConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender    User        @relation(fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, createdAt])
+  @@index([conversationId, createdAt])
 }

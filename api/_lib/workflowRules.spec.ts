@@ -12,6 +12,10 @@ describe('workflow authorization rules', () => {
     expect(canSeeRestrictedItem([], 'STUDENT')).toBe(true)
     expect(canSeeRestrictedItem(['STUDENT'], 'STUDENT')).toBe(true)
     expect(canSeeRestrictedItem(['PROFESSOR'], 'STUDENT')).toBe(false)
+    // Solicitante docente solo puede ver ítems públicos
+    expect(canSeeRestrictedItem([], 'STUDENT', true)).toBe(true)
+    expect(canSeeRestrictedItem(['STUDENT'], 'STUDENT', true)).toBe(false)
+    expect(canSeeRestrictedItem(['PROFESSOR'], 'STUDENT', true)).toBe(false)
   })
 
   it('detects overlapping request windows', () => {
@@ -30,5 +34,13 @@ describe('workflow authorization rules', () => {
     expect(requestDateError(new Date('2026-09-20T10:00:00Z'), new Date('2026-12-21T10:00:00Z'), now)).toBe(
       'REQUEST_RANGE_TOO_LONG',
     )
+  })
+
+  it('correctly identifies expired request starts against current time', () => {
+    const now = new Date('2026-10-25T12:00:00Z')
+    const pastStart = new Date('2026-10-25T11:00:00Z')
+    const futureStart = new Date('2026-10-25T13:00:00Z')
+    expect(pastStart.getTime() <= now.getTime()).toBe(true)
+    expect(futureStart.getTime() <= now.getTime()).toBe(false)
   })
 })

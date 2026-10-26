@@ -24,18 +24,18 @@ function handleRegisterSuccess() {
     return
   }
   if (route.query.redirect === 'publish') {
-    void router.replace({ name: 'landing', query: { publish: '1' } })
+    void router.replace({ name: 'publish' })
     return
   }
-  void router.replace({ name: 'landing' })
+  void router.replace({ name: 'student-home' })
 }
 </script>
 
 <template>
   <AuthPageShell
     eyebrow="Registro UJAP / LendIt"
-    title="Haz visible lo que puedes compartir."
-    description="Crea tu carnet digital y únete a una comunidad que presta objetos útiles entre clases, laboratorios y pasillos."
+    title="Tu comunidad empieza aquí."
+    description="Crea tu perfil UJAP para compartir objetos, solicitar lo que necesitas y coordinar las entregas dentro del campus."
     note="Necesitas un correo institucional @ujap.edu.ve y una foto de perfil para crear tu cuenta."
     card-kicker="Nueva cuenta"
     card-title="Crear mi cuenta"

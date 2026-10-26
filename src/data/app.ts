@@ -6,5 +6,5 @@ export function getAppName(): string {
 }
 
 export function getAppTagline(): string {
-  return 'Como Airbnb, pero para prestar cosas entre estudiantes por tiempo limitado.'
+  return 'Préstamos temporales de libros, equipos y herramientas entre estudiantes, con plazos claros y entrega directa en el campus.'
 }

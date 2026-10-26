@@ -43,10 +43,31 @@ Thumbs.db
 *.sw?
 
 # Docs
-docs/
+docs/*
+!docs/Definicion.md
+!docs/chat.md
+!docs/payments.md
+!docs/ui-screen-inventory.md
+!docs/category-images.md
+!docs/image-credits.md
+!docs/admin-access.md
+!docs/admin-corrective-brief.md
+!docs/account-settings.md
+!docs/qa-corrections-brief.md
+!docs/qa-corrections-report.md
+!docs/professor-review.md
+!docs/professor-implementation-brief.md
+!docs/professor-implementation-report.md
+!docs/teacher-verification-contract.md
 
 # Claude Code local settings
 .claude/
 
 # Codex local settings
 .codex/
+
+# DB json del CRUD sencillo
+data/simple-db.json
+
+# Temporary local PostgreSQL inspection script
+/_q.mjs

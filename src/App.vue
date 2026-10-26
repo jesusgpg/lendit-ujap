@@ -21,6 +21,7 @@ const lenditTheme: NotivueTheme = {
 </script>
 
 <template>
+  <a href="#main-content" class="skip-link">Saltar al contenido principal</a>
   <Notivue v-slot="item">
     <NotivueSwipe :item="item">
       <Notification :item="item" :theme="lenditTheme" close-aria-label="Cerrar notificación">

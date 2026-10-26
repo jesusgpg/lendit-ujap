@@ -55,7 +55,7 @@ describe('article workflow store', () => {
     expect(apiRequestMock).toHaveBeenNthCalledWith(
       1,
       '/api/items',
-      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ id: article.id, title: 'Calculadora HP', status: 'paused' }) }),
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ id: article.id, title: 'Calculadora HP', status: 'PAUSED' }) }),
     )
     expect(store.myArticles[0].title).toBe('Calculadora HP')
   })

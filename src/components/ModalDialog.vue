@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+
 withDefaults(
   defineProps<{
     title: string
@@ -7,16 +9,71 @@ withDefaults(
   { wide: false },
 )
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'close'): void
 }>()
+
+const dialog = ref<HTMLElement | null>(null)
+let previousFocus: HTMLElement | null = null
+let previousOverflow = ''
+let appRoot: HTMLElement | null = null
+let previousInert = false
+
+function focusableElements() {
+  return Array.from(dialog.value?.querySelectorAll<HTMLElement>(
+    'button:not([disabled]),a[href],input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+  ) ?? []).filter(el => el.tabIndex >= 0 && el.getClientRects().length > 0)
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]')
+  if (dialogs[dialogs.length - 1] !== dialog.value) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('close')
+  } else if (event.key === 'Tab') {
+    const elements = focusableElements()
+    const first = elements[0]
+    const last = elements[elements.length - 1]
+    if (!first) {
+      event.preventDefault()
+      dialog.value?.focus()
+    } else if (!dialog.value?.contains(document.activeElement) || (event.shiftKey && document.activeElement === first)) {
+      event.preventDefault()
+      ;(event.shiftKey ? last : first)?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+}
+
+onMounted(async () => {
+  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  previousOverflow = document.body.style.overflow
+  document.body.style.overflow = 'hidden'
+  appRoot = document.getElementById('app')
+  previousInert = appRoot?.inert ?? false
+  if (appRoot) appRoot.inert = true
+  document.addEventListener('keydown', handleKeydown, true)
+  await nextTick()
+  ;(focusableElements()[0] ?? dialog.value)?.focus({ preventScroll: true })
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeydown, true)
+  document.body.style.overflow = previousOverflow
+  if (appRoot) appRoot.inert = previousInert
+  if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })
+})
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
       <div class="modal-overlay" @click.self="$emit('close')">
-        <div class="modal" :class="{ 'modal--wide': wide }" role="dialog" aria-modal="true" :aria-label="title">
+        <div ref="dialog" class="modal" :class="{ 'modal--wide': wide }" role="dialog" aria-modal="true" :aria-label="title" tabindex="-1">
           <header class="modal__header">
             <h2>{{ title }}</h2>
             <button class="modal__close" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
@@ -90,6 +147,8 @@ defineEmits<{
 }
 
 .modal__close {
+  min-width: 44px;
+  min-height: 44px;
   background: transparent;
   border: none;
   font-size: 22px;
