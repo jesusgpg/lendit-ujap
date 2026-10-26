@@ -2,7 +2,11 @@ export function canManageOwnedResource(ownerId: string, actorId: string, permiss
   return ownerId === actorId || permissions.includes('users.manage')
 }
 
-export function canSeeRestrictedItem(visibleRoleIds: string[], actorRoleId: string) {
+export function canSeeRestrictedItem(visibleRoleIds: string[], actorRoleId: string, isTeacherApplicant = false) {
+  if (isTeacherApplicant) {
+    // Solicitantes docentes en DRAFT/PENDING/NEEDS_CORRECTION/REJECTED solo ven publicaciones públicas
+    return visibleRoleIds.length === 0
+  }
   return visibleRoleIds.length === 0 || visibleRoleIds.includes(actorRoleId)
 }
 

@@ -22,6 +22,8 @@ const emit = defineEmits<{
 const auth = useAuthStore()
 
 const errorMessage = ref('')
+const showPassword = ref(false)
+
 const { defineField, errors, handleSubmit, isSubmitting } = useForm({
   initialValues: { email: '', password: '' },
   validationSchema: {
@@ -68,15 +70,37 @@ const onSubmit = handleSubmit(async (values) => {
 
     <label class="field">
       <span>Contraseña</span>
-      <input
-        v-model="password"
-        v-bind="passwordAttrs"
-        type="password"
-        placeholder="Mínimo 6 caracteres"
-        autocomplete="current-password"
-        minlength="6"
-        required
-      />
+      <div class="field__password-control">
+        <input
+          v-model="password"
+          v-bind="passwordAttrs"
+          :type="showPassword ? 'text' : 'password'"
+          placeholder="Mínimo 6 caracteres"
+          autocomplete="current-password"
+          minlength="6"
+          required
+        />
+        <button
+          type="button"
+          class="field__pw-toggle"
+          :aria-label="showPassword ? 'Ocultar contraseña' : 'Ver contraseña en texto'"
+          :title="showPassword ? 'Ocultar contraseña' : 'Ver contraseña'"
+          @click="showPassword = !showPassword"
+        >
+          <!-- Eye icon when hidden -->
+          <svg v-if="!showPassword" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <!-- Eye slash icon when visible -->
+          <svg v-else aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+            <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+            <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+            <line x1="2" x2="22" y1="2" y2="22" />
+          </svg>
+        </button>
+      </div>
       <span v-if="errors.password" class="field__error">{{ errors.password }}</span>
     </label>
 
@@ -105,11 +129,12 @@ const onSubmit = handleSubmit(async (values) => {
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .auth-form__hint {
   font-size: 14px;
+  line-height: 1.5;
   color: var(--ink-faint);
 }
 
@@ -124,21 +149,65 @@ const onSubmit = handleSubmit(async (values) => {
 
 .field input {
   font: inherit;
-  padding: 11px 14px;
+  padding: 12px 14px;
   border-radius: 10px;
   border: 1.5px solid var(--line-strong);
   background: var(--paper);
   color: var(--ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .field input:focus {
   outline: none;
   border-color: var(--crimson);
+  box-shadow: 0 0 0 3px var(--crimson-bg);
+}
+
+.field__password-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.field__password-control input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.field__pw-toggle {
+  position: absolute;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.field__pw-toggle:hover {
+  color: var(--crimson);
+  background: var(--crimson-bg);
+}
+
+.field__pw-toggle:focus-visible {
+  outline: 2px solid var(--crimson);
+  outline-offset: 1px;
 }
 
 .auth-form__error {
   font-size: 13px;
   color: var(--crimson-dark);
+  background: var(--crimson-bg);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border-left: 3px solid var(--crimson-dark);
 }
 
 .field__error {
@@ -148,28 +217,31 @@ const onSubmit = handleSubmit(async (values) => {
 }
 
 .auth-form__submit {
-  margin-top: 4px;
   width: 100%;
-}
-
-.auth-form__submit:disabled {
-  cursor: wait;
-  opacity: 0.7;
+  margin-top: 4px;
 }
 
 .auth-form__switch {
   text-align: center;
   font-size: 13.5px;
   color: var(--ink-faint);
+  margin: 0;
 }
 
 .auth-form__link {
-  background: none;
+  background: transparent;
   border: none;
   padding: 0;
   font: inherit;
   font-weight: 600;
-  color: var(--crimson);
+  color: var(--crimson-dark);
   cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+
+.auth-form__link:hover {
+  color: var(--crimson);
 }
 </style>

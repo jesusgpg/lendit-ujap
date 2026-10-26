@@ -3,20 +3,27 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SiteHeader from '../components/SiteHeader.vue'
 import SiteFooter from '../components/SiteFooter.vue'
+import { useAuthStore } from '../stores/auth'
 
-const sections = [
-  { id: 'roles', routeName: 'admin-roles', label: 'Roles y permisos', icon: '◈', hint: 'Define quién puede hacer qué dentro de LendIt.' },
-  { id: 'users', routeName: 'admin-users', label: 'Usuarios', icon: '⚈', hint: 'Administra las cuentas que participan en la red.' },
-  { id: 'categories', routeName: 'admin-categories', label: 'Tipos de artículo', icon: '▤', hint: 'Ordena los objetos que se pueden prestar.' },
-  { id: 'careers', routeName: 'admin-careers', label: 'Carreras', icon: '✎', hint: 'Mantén actualizada la estructura académica.' },
+const allSections = [
+  { id: 'roles', routeName: 'admin-roles', permission: 'roles.manage', label: 'Roles y permisos', icon: '◈', hint: 'Define quién puede hacer qué dentro de LendIt.' },
+  { id: 'users', routeName: 'admin-users', permission: 'users.manage', label: 'Usuarios', icon: '⚈', hint: 'Administra las cuentas que participan en la red.' },
+  { id: 'verificaciones-docentes', routeName: 'admin-teacher-verifications', permission: 'teachers.review', label: 'Validaciones docentes', icon: '✓', hint: 'Revisa acreditaciones y credenciales del cuerpo docente.' },
+  { id: 'categories', routeName: 'admin-categories', permission: 'categories.manage', label: 'Tipos de artículo', icon: '▤', hint: 'Ordena los objetos que se pueden prestar.' },
+  { id: 'schools', routeName: 'admin-schools', permission: 'careers.manage', label: 'Escuelas', icon: '⌂', hint: 'Crea y mantén las escuelas de la universidad.' },
+  { id: 'careers', routeName: 'admin-careers', permission: 'careers.manage', label: 'Carreras', icon: '✎', hint: 'Mantén actualizada la estructura académica.' },
 ] as const
 
-const route = useRoute()
-const router = useRouter()
-const activeSection = computed(() => sections.find((section) => section.routeName === route.name)?.id ?? 'roles')
-const currentSection = computed(() => sections.find((section) => section.id === activeSection.value) ?? sections[0])
+const auth = useAuthStore()
+const sections = computed(() => allSections.filter((section) => auth.hasPermission(section.permission)))
 
-function openSection(routeName: (typeof sections)[number]['routeName']) {
+const route = useRoute()
+const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
+const router = useRouter()
+const activeSection = computed(() => allSections.find((section) => section.routeName === route.name)?.id ?? sections.value[0]?.id ?? 'roles')
+const currentSection = computed(() => allSections.find((section) => section.id === activeSection.value) ?? allSections[0])
+
+function openSection(routeName: (typeof allSections)[number]['routeName']) {
   void router.push({ name: routeName })
 }
 </script>
@@ -28,7 +35,7 @@ function openSection(routeName: (typeof sections)[number]['routeName']) {
     <div class="admin">
       <aside class="admin__sidebar">
         <div class="admin__identity">
-          <span class="admin__identity-mark" aria-hidden="true">L</span>
+          <span class="admin__identity-mark" aria-hidden="true"><img :src="crestSrc" alt="" /></span>
           <div>
             <p>Administración</p>
             <strong>Control del campus</strong>
@@ -60,7 +67,7 @@ function openSection(routeName: (typeof sections)[number]['routeName']) {
         </p>
       </aside>
 
-      <main class="admin__content">
+      <main id="main-content" class="admin__content">
         <header class="admin__masthead">
           <div>
             <p class="admin__eyebrow">Configuración de LendIt</p>

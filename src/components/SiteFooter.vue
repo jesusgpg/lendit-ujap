@@ -14,6 +14,7 @@ const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
         <p>Hecho por estudiantes, para estudiantes de la UJAP.</p>
       </div>
     </div>
+    <nav class="site-footer__links" aria-label="Información de LendIt"><router-link to="/como-funciona">Cómo funciona</router-link><router-link to="/categorias">Categorías</router-link><router-link to="/confianza">Confianza</router-link></nav>
     <p class="site-footer__note">© {{ new Date().getFullYear() }} {{ appName }} · San Diego, Carabobo</p>
   </footer>
 </template>

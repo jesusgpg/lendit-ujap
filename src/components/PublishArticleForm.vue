@@ -4,7 +4,7 @@ import { useForm } from 'vee-validate'
 import { push } from 'notivue'
 import { useArticlesStore } from '../stores/articles'
 import { useCatalogStore } from '../stores/catalog'
-import { removeItemPhoto, uploadItemPhoto } from '../lib/storage'
+import { removeItemPhotos, uploadItemPhoto } from '../lib/storage'
 import type { Article, Currency, ItemMode, NewArticleInput, UpdateArticleInput } from '../types'
 import PhotoDropzone from './PhotoDropzone.vue'
 
@@ -27,8 +27,16 @@ const catalog = useCatalogStore()
 // Audiencia: vacío = visible para todos. 'STUDENT' / 'PROFESSOR' restringe quién puede pedirlo.
 const restrictedToRoles = ref<string[]>(props.article?.restrictedToRoles ?? [])
 const publicationMode = ref<ItemMode>(props.article?.mode ?? 'LOAN')
-const photoPreview = ref(props.article?.photoUrl ?? '')
-const photoRemoved = ref(false)
+
+function getInitialPhotos(): string[] {
+  if (props.article?.photoUrls && props.article.photoUrls.length > 0) {
+    return [...props.article.photoUrls]
+  }
+  return props.article?.photoUrl ? [props.article.photoUrl] : []
+}
+
+const photos = ref<string[]>(getInitialPhotos())
+const originalPhotos = ref<string[]>(getInitialPhotos())
 const errorMessage = ref('')
 const { defineField, errors, handleSubmit, isSubmitting, setFieldValue } = useForm({
   initialValues: {
@@ -62,15 +70,13 @@ onMounted(async () => {
   }
 })
 
-function handlePhotoUpdate(dataUrl: string) {
-  photoPreview.value = dataUrl
-  photoRemoved.value = false
+function handlePhotosUpdate(val: string | string[]) {
+  photos.value = Array.isArray(val) ? val : (val ? [val] : [])
   errorMessage.value = ''
 }
 
-function clearPhoto() {
-  photoPreview.value = ''
-  photoRemoved.value = true
+function clearAllPhotos() {
+  photos.value = []
 }
 
 const onSubmit = handleSubmit(async (values) => {
@@ -78,12 +84,22 @@ const onSubmit = handleSubmit(async (values) => {
   const selectedMode = publicationMode.value
   const selectedCurrency = currency.value as Currency
   const selectedPrice = selectedMode === 'RENTAL' ? Number(price.value) : undefined
-  let uploadedPhotoUrl: string | null = null
+  const newlyUploadedUrls: string[] = []
 
   try {
-    if (photoPreview.value && photoPreview.value !== props.article?.photoUrl) {
-      uploadedPhotoUrl = await uploadItemPhoto(photoPreview.value)
+    const finalUploadedUrls: string[] = []
+
+    for (const photo of photos.value) {
+      if (photo.startsWith('data:')) {
+        const uploaded = await uploadItemPhoto(photo)
+        newlyUploadedUrls.push(uploaded)
+        finalUploadedUrls.push(uploaded)
+      } else {
+        finalUploadedUrls.push(photo)
+      }
     }
+
+    const coverPhotoUrl = finalUploadedUrls[0] ?? null
 
     if (props.article) {
       const input: UpdateArticleInput = {
@@ -95,17 +111,19 @@ const onSubmit = handleSubmit(async (values) => {
         price: selectedPrice,
         currency: selectedMode === 'RENTAL' ? selectedCurrency : undefined,
         restrictedToRoles: restrictedToRoles.value,
-      }
-      if (photoRemoved.value) {
-        input.photoUrl = null
-      } else if (uploadedPhotoUrl) {
-        input.photoUrl = uploadedPhotoUrl
+        photoUrl: coverPhotoUrl,
+        photoUrls: finalUploadedUrls,
       }
 
       await articlesStore.update(props.article.id, input)
-      if ((uploadedPhotoUrl || photoRemoved.value) && props.article.photoUrl) {
-        void removeItemPhoto(props.article.photoUrl).catch(() => undefined)
+
+      // Clean up removed original photos from Supabase storage
+      const removedPhotos = originalPhotos.value.filter((url) => !finalUploadedUrls.includes(url))
+      if (removedPhotos.length > 0) {
+        void removeItemPhotos(removedPhotos).catch(() => undefined)
       }
+
+      originalPhotos.value = [...finalUploadedUrls]
       emit('updated')
     } else {
       const input: NewArticleInput = {
@@ -117,8 +135,10 @@ const onSubmit = handleSubmit(async (values) => {
         price: selectedPrice,
         currency: selectedMode === 'RENTAL' ? selectedCurrency : undefined,
         restrictedToRoles: restrictedToRoles.value,
+        photoUrl: coverPhotoUrl ?? undefined,
+        photoUrls: finalUploadedUrls,
       }
-      if (uploadedPhotoUrl) input.photoUrl = uploadedPhotoUrl
+
       await articlesStore.publish(input)
       emit('published')
     }
@@ -131,11 +151,12 @@ const onSubmit = handleSubmit(async (values) => {
       setFieldValue('currency', 'USD')
       restrictedToRoles.value = []
       publicationMode.value = 'LOAN'
-      photoPreview.value = ''
+      photos.value = []
+      originalPhotos.value = []
     }
   } catch (error) {
-    if (uploadedPhotoUrl) {
-      await removeItemPhoto(uploadedPhotoUrl).catch(() => undefined)
+    if (newlyUploadedUrls.length > 0) {
+      await removeItemPhotos(newlyUploadedUrls).catch(() => undefined)
     }
     errorMessage.value = error instanceof Error ? error.message : 'No se pudo guardar el objeto.'
     push.error({
@@ -218,14 +239,18 @@ const onSubmit = handleSubmit(async (values) => {
     </div>
 
     <div class="field field--photo">
-      <span>Foto del objeto <small>(opcional)</small></span>
+      <span>Fotos del objeto <small>(hasta 8 fotos · la primera será la portada)</small></span>
       <PhotoDropzone
-        :model-value="photoPreview"
+        :model-value="photos"
+        multiple
+        :max-files="8"
         alt="Foto del objeto"
-        hint="JPG o PNG, hasta 5 MB. Se optimiza automáticamente."
-        @update:model-value="handlePhotoUpdate"
+        hint="JPG o PNG, hasta 5 MB por foto."
+        @update:model-value="handlePhotosUpdate"
       />
-      <button v-if="photoPreview" type="button" class="photo-remove" @click="clearPhoto">Quitar foto</button>
+      <button v-if="photos.length > 0" type="button" class="photo-remove" @click="clearAllPhotos">
+        Quitar todas las fotos
+      </button>
     </div>
 
     <fieldset class="field field--audience">

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LendIt UJAP – Prototipo UI</title>
+  <style>
+    /* Global */
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#222;}
+    header{background:#800000;color:#fff;padding:0.8rem 1rem;display:flex;flex-direction:column;align-items:flex-start;gap:0.5rem;}
+    header h1{margin:0;font-size:1.2rem;}
+    nav.main-nav{display:flex;gap:1rem;flex-wrap:wrap;}
+    nav.main-nav button{background:none;border:none;color:#fff;font:inherit;cursor:pointer;padding:0.4rem 0.8rem;}
+    nav.main-nav button.active{border-bottom:2px solid #ffd700;}
+    .content{padding:1rem;}
+    .hidden{display:none;}
+    /* Picker (verbatim) */
+    .proto-picker{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:2px;padding:4px;border-radius:999px;background:rgba(10,10,10,0.82);-webkit-backdrop-filter:blur(12px) saturate(1.4);backdrop-filter:blur(12px) saturate(1.4);box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset,0 8px 24px rgba(0,0,0,0.24),0 2px 6px rgba(0,0,0,0.12);font-size:13px;line-height:1;-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;}
+    .proto-picker-highlight{position:absolute;top:4px;left:0;height:28px;border-radius:999px;background:rgba(255,255,255,0.12);will-change:transform;}
+    .proto-picker[data-ready] .proto-picker-highlight{transition:transform 250ms cubic-bezier(0.23,1,0.32,1),width 250ms cubic-bezier(0.23,1,0.32,1);}
+    @media (prefers-reduced-motion:reduce){.proto-picker[data-ready] .proto-picker-highlight{transition:none;}}
+    .proto-picker-item{position:relative;display:flex;align-items:center;height:28px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:rgba(255,255,255,0.55);font:inherit;cursor:pointer;transition:color 150ms ease-out;}
+    .proto-picker-item:hover{color:rgba(255,255,255,0.85);} .proto-picker-item:active{transform:scale(0.97);} .proto-picker-item:focus-visible{outline:2px solid rgba(255,255,255,0.4);outline-offset:2px;}
+    .proto-picker-item[data-active]{color:#fff;}
+    .proto-picker-divider{width:1px;height:16px;margin:0 4px;background:rgba(255,255,255,0.12);}
+    .proto-picker-replay{padding:0 10px;font-size:14px;}
+    /* Variant‑specific */
+    .grid.explorer{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;}
+    .explorer .card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+    .feedback{position:fixed;bottom:80px;left:50%;transform:translate(-50%,8px);background:var(--navy,#1a2b6b);color:#fff;padding:0.75rem 1rem;border-radius:999px;z-index:2147483647;opacity:0;visibility:hidden;box-shadow:0 10px 30px #161d3333;transition:opacity 180ms cubic-bezier(0.23,1,0.32,1),transform 180ms cubic-bezier(0.23,1,0.32,1),visibility 180ms;}
+    .feedback.show{opacity:1;visibility:visible;transform:translate(-50%,0);}
+    :root{--ease-out:cubic-bezier(0.23,1,0.32,1);--ease-in-out:cubic-bezier(0.77,0,0.175,1)}
+    @keyframes stage-enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes product-enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    #stage>.market-hero,#stage>.editorial-screen,#stage>.desk-screen,#stage>h2,#stage>form,#stage>.chat{animation:stage-enter 420ms var(--ease-out) both}
+    #stage>.filter-bar{animation:stage-enter 420ms var(--ease-out) 50ms both}
+    #stage>.grid .card,#stage .editorial-card,#stage .utility-row{animation:product-enter 360ms var(--ease-out) both}
+    #stage>.grid .card:nth-child(2),#stage .editorial-card:nth-child(2),#stage .utility-row:nth-child(2){animation-delay:45ms}
+    #stage>.grid .card:nth-child(3),#stage .editorial-card:nth-child(3),#stage .utility-row:nth-child(3){animation-delay:90ms}
+    #stage>.grid .card:nth-child(4),#stage .utility-row:nth-child(4){animation-delay:135ms}
+    #stage>.grid .card:nth-child(5),#stage .utility-row:nth-child(5){animation-delay:180ms}
+    #stage>.grid .card:nth-child(6),#stage .utility-row:nth-child(6){animation-delay:225ms}
+    #stage .editorial-story__photo img{transition:transform 700ms var(--ease-out)}
+    .modal{opacity:1;transition:opacity 220ms var(--ease-out)}
+    .modal.hidden{display:none;opacity:0}
+    .modal:not(.hidden) .panel{@starting-style{opacity:0;transform:scale(.97)};opacity:1;transform:scale(1);transition:opacity 220ms var(--ease-out),transform 220ms var(--ease-out)}
+    @media (hover:hover) and (pointer:fine){#stage .explorer .card img,.editorial-card__image img{transition:transform 500ms var(--ease-out)}#stage .explorer .card:hover img,.editorial-card:hover .editorial-card__image img{transform:scale(1.035)}#stage .editorial-story:hover .editorial-story__photo img{transform:scale(1.025)}}
+    #stage button:active{transform:scale(.98)}
+    @media(prefers-reduced-motion:reduce){#stage>.market-hero,#stage>.editorial-screen,#stage>.desk-screen,#stage>h2,#stage>form,#stage>.chat,#stage>.filter-bar,#stage>.grid .card,#stage .editorial-card,#stage .utility-row{animation:none!important}#stage .explorer .card img,.editorial-card__image img,.editorial-story__photo img{transition:none!important}#stage button:active{transform:none}.feedback,.modal,.modal:not(.hidden) .panel{transition:opacity 120ms linear,visibility 120ms linear}.feedback{transform:translate(-50%,0)}}
+
+    .explorer.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;}
+    .explorer .card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+    .explorer .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;}
+    .explorer .card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+    .explorer .card img{width:100%;height:140px;object-fit:cover;}
+    .explorer .card h3{margin:0.5rem;font-size:1rem;}
+    .explorer .card p{margin:0.5rem;font-size:0.9rem;color:#555;}
+    .explorer .card button{margin:0.5rem;width:calc(100% - 1rem);padding:0.4rem;background:#800000;color:#fff;border:none;border-radius:4px;cursor:pointer;}
+    .editorial article{display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;}
+    .editorial article img{width:150px;height:150px;object-fit:cover;border-radius:8px;}
+    .editorial article div{flex:1;}
+    .editorial article h3{margin:0;font-size:1.3rem;}
+    .editorial article p{margin:0.5rem 0;color:#444;}
+    .editorial article button{background:#800000;color:#fff;border:none;padding:0.4rem 0.8rem;border-radius:4px;cursor:pointer;}
+    .utility table{width:100%;border-collapse:collapse;}
+    .utility th,.utility td{border:1px solid #ddd;padding:0.5rem;text-align:left;}
+    .utility button{background:#800000;color:#fff;border:none;padding:0.3rem 0.6rem;border-radius:3px;cursor:pointer;}
+    @media (max-width:600px){header{align-items:center;}header h1{font-size:1rem;}}
+    /* Polished marketplace directions */
+    :root{--wine:#c8102e;--wine-dark:#96091f;--ink:#161d33;--muted:#52503f;--paper:#fff;--line:#d8d0bd;--card:#fff;--accent:#c9971f;--navy:#1a2b6b;--cream:#efe6d0;--sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+    body{background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;transition:background .25s,color .25s}
+    header{min-height:72px;box-sizing:border-box;background:var(--cream);color:var(--ink);padding:12px clamp(18px,5vw,72px);flex-direction:row;align-items:center;gap:24px;border-bottom:1px solid #d7cba9;position:sticky;top:0;z-index:10}
+    .brand-lockup{display:flex;align-items:center;gap:11px;text-decoration:none}
+    .brand-lockup img{width:42px;height:46px;object-fit:contain}
+    .brand-lockup h1{font-family:Georgia,serif;font-size:1.45rem;letter-spacing:-.03em;color:var(--navy)}
+    .brand-lockup span{display:block;font:700 .65rem/1.2 Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:.12em;color:var(--wine);text-transform:uppercase}
+    nav.main-nav{margin-left:auto;gap:6px}
+    nav.main-nav button{color:#54515a;padding:10px 12px;border-radius:999px;font-size:.9rem}
+    nav.main-nav button:hover,nav.main-nav button.active{background:#ffffffa8;color:var(--wine)}
+    nav.main-nav button.active{border:0}
+    .content{max-width:1440px;margin:0 auto;padding:clamp(22px,4vw,54px) clamp(18px,5vw,72px) 100px}
+    .market-hero{display:grid;grid-template-columns:1fr minmax(250px,.8fr);gap:38px;align-items:center;margin:0 0 36px}
+    .market-hero-copy{max-width:650px}
+    .eyebrow{color:var(--wine);font-size:.76rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+    .market-hero h2{font:500 clamp(2.4rem,5.3vw,4.4rem)/1.02 Georgia,serif;letter-spacing:-.045em;margin:12px 0 15px;color:var(--ink)}
+    .market-hero p{max-width:580px;font-size:1.08rem;line-height:1.65;color:var(--muted);margin:0}
+    .hero-visual{position:relative;min-height:290px;overflow:hidden;border:5px solid #fff;border-radius:24px;box-shadow:0 16px 38px #161d3320;background:var(--navy)}
+    .hero-visual img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .hero-visual:after{content:"";position:absolute;inset:35% 0 0;background:linear-gradient(transparent,#101a3ddd)}
+    .hero-visual__label{position:absolute;z-index:1;left:22px;bottom:18px;color:white;font-weight:650;letter-spacing:.02em}
+    .hero-visual__crest{position:absolute;z-index:2;top:15px;right:15px;width:62px;height:62px;padding:8px;background:var(--cream);border:2px solid var(--accent);border-radius:50%;object-fit:contain}
+    .hero-visual img.hero-visual__crest{inset:15px 15px auto auto;width:62px;height:62px}
+    .filter-bar{display:flex;gap:10px;margin:26px 0 20px!important;flex-wrap:wrap;align-items:center}
+    .filter-bar input,.filter-bar select{background:#fff;border:1px solid #ddd6cc;border-radius:999px;padding:12px 16px;font:inherit;color:var(--ink);min-height:44px}
+    .filter-bar input{min-width:min(360px,100%)}
+    .filter-bar input:focus,.filter-bar select:focus{outline:3px solid #c8102e26;border-color:var(--wine)}
+    .content .grid.explorer{grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:18px}
+    .explorer .card{border:1px solid var(--line);border-radius:18px;box-shadow:0 4px 14px #2b24330a;transition:transform .2s,box-shadow .2s}
+    .explorer .card:hover{transform:translateY(-3px);box-shadow:0 12px 28px #2b24331a}
+    .explorer .card img{height:190px;background:#ede8df}
+    .explorer .card h3{font-size:1.03rem;margin:14px 14px 6px;letter-spacing:-.01em}
+    .explorer .card p{font-size:.88rem;line-height:1.45;margin:0 14px 10px;color:var(--muted);min-height:38px}
+    .explorer .card button,.editorial article button,.utility button{background:var(--wine);border-radius:999px;font-weight:650;padding:10px 14px;transition:background .15s,transform .15s}
+    .explorer .card button:hover,.editorial article button:hover,.utility button:hover{background:var(--wine-dark);transform:translateY(-1px)}
+    .card.no-image:before{content:"Foto del artículo";height:190px;display:grid;place-items:center;background:linear-gradient(135deg,#e8dfd0,#f7f2e9);color:#877c6c;font-size:.86rem}
+    .modal{position:fixed;inset:0;z-index:30;background:#17131bb3;display:grid;place-items:center;padding:20px;backdrop-filter:blur(4px)}
+    .modal.hidden{display:none}
+    .modal .panel{width:min(100%,460px);box-shadow:0 24px 80px #0004}
+    .modal button{border:0;border-radius:999px;padding:10px 16px;background:var(--wine);color:white;cursor:pointer;margin:4px}
+    .editorial article{background:#fff;border:1px solid var(--line);border-radius:20px;padding:16px;align-items:center;box-shadow:0 6px 20px #201b1808}
+    .editorial article img{width:190px;height:160px;border-radius:14px}
+    .editorial article h3{font:600 1.5rem Georgia,serif;color:var(--ink)}
+    .editorial article p{line-height:1.55;color:var(--muted)}
+    .utility{width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 28px #18213a0b}
+    .utility tbody tr:hover{background:#f8fafc}
+    .editorial article img{background:#e9e3d9}
+    .editorial article img:not([src]),.editorial article img[src=""]{display:none}
+    #stage>h2{font:500 clamp(2rem,4vw,3.2rem)/1.1 Georgia,serif;letter-spacing:-.035em;margin:0 0 24px}
+    #stage form{max-width:620px;background:#fff;padding:26px;border:1px solid var(--line);border-radius:20px;box-shadow:0 8px 24px #201b180a}
+    #stage form label{display:inline-block;color:#55515a;font-weight:600;margin:10px 0}
+    #stage form input,#stage form select,#stage form textarea,#chat-input{box-sizing:border-box;max-width:100%;border:1px solid #d9d4cc;border-radius:10px;padding:12px;font:inherit;background:#fff}
+    #stage form input,#stage form select,#stage form textarea{width:min(100%,520px)}
+    #stage form button,#send-chat{background:var(--wine);color:#fff;border:0;border-radius:999px;padding:12px 20px;font:inherit;font-weight:650;cursor:pointer;margin-top:12px}
+    .utility th{background:#f0edf5;color:#4e4a5b;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em}
+    .utility tr+tr{border-top:1px solid var(--line)}
+    body[data-variant="editorial"]{--paper:var(--cream);--ink:#161d33;--wine:#c8102e;--wine-dark:#96091f;--line:#d7cba9}
+    body[data-variant="editorial"] header{background:#e6dabd}
+    body[data-variant="editorial"] .market-hero h2{font-size:clamp(2.8rem,6vw,5rem)}
+    body[data-variant="editorial"] .editorial article{border-radius:4px;box-shadow:none;border-width:0 0 1px;background:transparent;padding:20px 0}
+    body[data-variant="editorial"] .editorial article img{border-radius:2px}
+    body[data-variant="utility"]{--paper:#f4f6fb;--ink:#161d33;--wine:#c8102e;--wine-dark:#96091f;--line:#d8d0bd}
+    body[data-variant="utility"] header{background:var(--cream)}
+    body[data-variant="utility"] .content{max-width:1500px}
+    body[data-variant="utility"] .utility th{background:#e8eef6}
+    /* Direction 2: campus journal — an editorial story, not a plain article list. */
+    .editorial-screen{max-width:1260px;margin:0 auto}
+    .editorial-heading{display:grid;grid-template-columns:1.15fr .7fr;align-items:end;gap:50px;margin:8px 0 28px}
+    .editorial-kicker,.desk-kicker{color:var(--wine);font-size:.78rem;font-weight:750;letter-spacing:.12em;text-transform:uppercase;margin:0 0 11px}
+    .editorial-heading h2{max-width:720px;font:500 clamp(2.8rem,5.2vw,4.8rem)/.98 Georgia,serif;letter-spacing:-.055em;color:var(--navy)}
+    .editorial-heading>p{max-width:360px;border-left:3px solid var(--accent);padding:4px 0 4px 18px;color:#41465b;font-size:1.02rem;line-height:1.7}
+    .editorial-story{display:grid;grid-template-columns:1.1fr .9fr;min-height:340px;overflow:hidden;border-radius:22px;background:var(--navy);color:#fff;box-shadow:0 12px 30px #1a2b6b20}
+    .editorial-story__photo{position:relative;min-height:340px;overflow:hidden}
+    .editorial-story__photo img{width:100%;height:100%;position:absolute;inset:0;object-fit:cover}
+    .editorial-story__photo:after{content:"";position:absolute;inset:55% 0 0;background:linear-gradient(transparent,#111b3db8)}
+    .editorial-story__photo>span{position:absolute;z-index:1;bottom:20px;left:22px;color:white;font-size:.85rem;font-weight:600}
+    .editorial-story__copy{padding:clamp(28px,4vw,54px);display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
+    .editorial-story__mark{display:flex;align-items:center;gap:9px;color:#f6d98e;font-size:.8rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:20px}
+    .editorial-story__mark img{width:27px;height:30px;object-fit:contain;background:var(--cream);border-radius:50%;padding:4px}
+    .editorial-story__copy h3{font:500 clamp(1.8rem,3vw,2.6rem)/1.08 Georgia,serif;color:white;letter-spacing:-.035em;margin:0 0 14px}
+    .editorial-story__copy p{max-width:420px;color:#e0e4f2;line-height:1.65;margin:0 0 23px}
+    .editorial-story__action{padding:0 0 7px;background:transparent;border:0;border-bottom:1px solid #f0c95c;color:#f9db88;font:650 .95rem var(--sans);cursor:pointer}
+    .editorial-story__action span{margin-left:9px}
+    .editorial-products-head{display:flex;align-items:baseline;justify-content:space-between;margin:34px 0 16px}
+    .editorial-products-head h3{font:600 1.4rem Georgia,serif;color:var(--navy)}
+    .editorial-products-head span{color:var(--muted);font-size:.85rem}
+    .editorial-products{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+    .editorial-card{min-width:0;background:white;border:1px solid #e5dfd2;border-radius:16px;overflow:hidden}
+    .editorial-card__image{height:190px;position:relative;background:#e9e4d8}
+    .editorial-card__image img{width:100%;height:100%;object-fit:cover}
+    .editorial-card__image>span{position:absolute;bottom:12px;left:12px;background:var(--cream);color:var(--navy);border-radius:999px;padding:5px 10px;font-size:.76rem;font-weight:700}
+    .editorial-card__image.no-image:after{content:"Foto no disponible";position:absolute;inset:0;display:grid;place-items:center;color:var(--ink-soft)}
+    .editorial-card__body{padding:15px 16px 17px}
+    .editorial-card__body h4{font:650 1.08rem Georgia,serif;color:var(--navy);margin:0 0 6px}
+    .editorial-card__body p{min-height:42px;color:var(--muted);font-size:.88rem;line-height:1.5;margin:0 0 12px}
+    .editorial-card__body button{padding:0!important;background:none!important;color:var(--wine);border:0;border-bottom:1px solid #c8102e4d;border-radius:0!important;font:650 .85rem var(--sans);cursor:pointer}
+    .editorial-card__body button:hover{color:var(--wine-dark)}
+    /* Direction 3: framed campus desk — calm filters and product rows for repeat use. */
+    .desk-screen{max-width:1360px;margin:0 auto}
+    .desk-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 0 22px}
+    .desk-heading h2{font:600 clamp(1.8rem,3vw,2.45rem)/1.1 var(--sans);letter-spacing:-.04em;color:var(--navy);margin:0 0 7px}
+    .desk-heading>div>p:last-child{color:var(--muted);font-size:.95rem}
+    .desk-date{padding:8px 12px;border:1px solid var(--line);border-radius:999px;color:#55515a;background:white;font-size:.8rem}
+    .desk-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-block:1px solid #d8d0bd;margin-bottom:20px}
+    .desk-summary>div{padding:12px 18px;display:flex;align-items:baseline;gap:10px;border-right:1px solid #d8d0bd}
+    .desk-summary>div:first-child{padding-left:0}
+    .desk-summary>div:last-child{border-right:0}
+    .desk-summary strong{font:600 1.16rem Georgia,serif;color:var(--navy)}
+    .desk-summary span{font-size:.83rem;color:var(--muted)}
+    .desk-layout{display:grid;grid-template-columns:244px minmax(0,1fr);gap:9px;background:#efe6d0;padding:9px;border:1px solid #ded3ba;border-radius:18px;align-items:stretch}
+    .desk-rail{padding:22px 18px;background:#f8f3e8;border-radius:12px;display:flex;flex-direction:column;align-items:stretch}
+    .desk-rail__top{display:flex;align-items:center;gap:10px;padding-bottom:20px;border-bottom:1px solid #ded6c4}
+    .desk-rail__top img{width:34px;height:38px;object-fit:contain}
+    .desk-rail__top strong,.desk-rail__top span{display:block}
+    .desk-rail__top strong{font:650 1rem Georgia,serif;color:var(--navy)}
+    .desk-rail__top span{font-size:.72rem;color:var(--muted);margin-top:2px}
+    .desk-rail h3{font:650 1.02rem var(--sans);color:var(--navy);margin:22px 0 13px}
+    .desk-rail label{font-size:.79rem;font-weight:650;color:#4c4b4a;margin-bottom:7px}
+    .desk-rail select{min-height:43px;width:100%;padding:9px 11px;border:1px solid #d4ccb9;border-radius:9px;background:white;color:var(--ink);font:inherit;font-size:.83rem}
+    .desk-rail__note{margin-top:auto;padding-top:25px}
+    .desk-rail__note span{font-size:.76rem;font-weight:700;color:var(--wine)}
+    .desk-rail__note p{color:#585348;font-size:.8rem;line-height:1.55;margin-top:6px}
+    .desk-sheet{min-width:0;background:#fff;border:1px solid #ddd7ca;border-radius:12px;padding:22px 24px}
+    .desk-sheet__toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-bottom:16px;border-bottom:1px solid #e5e1d8}
+    .desk-sheet__toolbar h3{font:650 1.15rem var(--sans);letter-spacing:-.02em;color:var(--navy);margin:0 0 3px}
+    .desk-sheet__toolbar span{font-size:.78rem;color:var(--muted)}
+    .desk-sheet__toolbar input{width:min(280px,45%);min-height:42px;padding:9px 13px;border:1px solid #d9d4ca;border-radius:999px;font:inherit;font-size:.85rem}
+    .utility-list{display:flex;flex-direction:column}
+    .utility-row{display:grid;grid-template-columns:88px minmax(0,1fr) auto;align-items:center;gap:16px;padding:13px 0;border-bottom:1px solid #eeeae2}
+    .utility-row:last-child{border-bottom:0}
+    .utility-row>img{width:88px;height:70px;object-fit:cover;border-radius:8px;background:#eee9dd}
+    .utility-row__main>span{font-size:.74rem;color:var(--wine);font-weight:700}
+    .utility-row__main h4{font:650 1rem var(--sans);color:var(--ink);margin:3px 0}
+    .utility-row__main p{font-size:.82rem;color:var(--muted);line-height:1.4}
+    .utility-row .request-btn{min-width:105px;background:var(--navy);border:0;border-radius:999px;color:white;padding:10px 13px;font:650 .82rem var(--sans);cursor:pointer}
+    .utility-row .request-btn:hover{background:#24398c}
+    .utility-row.no-image:before{content:"UJAP";width:88px;height:70px;display:grid;place-items:center;background:#efe6d0;color:var(--navy);font:700 .8rem var(--sans);border-radius:8px}
+    .utility-empty{padding:34px 10px;text-align:center;color:var(--muted)}
+    body[data-variant="editorial"]{background:var(--cream)}
+    body[data-variant="utility"] .content{padding-top:34px}
+    @media(max-width:900px){.editorial-heading{grid-template-columns:1fr;gap:14px}.editorial-story{grid-template-columns:1fr 1fr}.editorial-products{grid-template-columns:repeat(2,minmax(0,1fr))}.desk-layout{grid-template-columns:205px minmax(0,1fr)}}
+    @media(max-width:640px){.editorial-heading h2{font-size:2.7rem}.editorial-story{grid-template-columns:1fr}.editorial-story__photo{min-height:210px}.editorial-products{grid-template-columns:1fr}.editorial-products-head{align-items:flex-start;gap:12px;flex-direction:column}.desk-heading{align-items:flex-start;flex-direction:column}.desk-summary>div{padding:11px 8px;gap:4px;flex-direction:column}.desk-summary>div:first-child{padding-left:0}.desk-summary strong{font-size:1rem}.desk-summary span{font-size:.7rem}.desk-layout{grid-template-columns:1fr}.desk-rail{padding:16px}.desk-rail__note{margin-top:14px;padding-top:14px;border-top:1px solid #ded6c4}.desk-sheet{padding:16px 12px}.desk-sheet__toolbar{align-items:flex-start;flex-direction:column}.desk-sheet__toolbar input{width:100%}.utility-row{grid-template-columns:64px minmax(0,1fr);gap:10px}.utility-row>img,.utility-row.no-image:before{width:64px;height:64px}.utility-row .request-btn{grid-column:2;justify-self:start;padding:8px 12px}}
+    @media(max-width:720px){header{position:relative;flex-wrap:wrap;gap:8px}.brand-lockup img{width:36px;height:40px}.brand-lockup h1{font-size:1.25rem}nav.main-nav{width:100%;margin:0;overflow:auto}nav.main-nav button{white-space:nowrap}.market-hero{grid-template-columns:1fr;gap:20px}.hero-visual{min-height:210px}.content{padding-top:24px}.explorer .card img{height:180px}.utility{display:block;overflow-x:auto;white-space:nowrap}.editorial article img{width:112px;height:112px}}
+  </style>
+</head>
+<body>
+<header>
+  <a class="brand-lockup" href="#" aria-label="LendIt UJAP, inicio">
+    <img src="/images/Logo-UJAP1.png" alt="Escudo Universidad José Antonio Páez" />
+    <div><h1>LendIt</h1><span>Universidad José Antonio Páez</span></div>
+  </a>
+  <nav class="main-nav" aria-label="Navegación principal">
+    <button data-section="explore" class="active">Explorar</button>
+    <button data-section="requests">Mis solicitudes</button>
+    <button data-section="messages">Mensajes</button>
+    <button data-section="publish">Publicar</button>
+  </nav>
+</header>
+<div id="stage" class="content"></div>
+    <div id="feedback" class="feedback" aria-live="polite"></div>
+<!-- Picker -->
+<nav class="proto-picker" aria-label="Prototype variants"><span class="proto-picker-highlight" aria-hidden="true"></span><button class="proto-picker-item" data-active aria-current="true">Campus Explorer</button><button class="proto-picker-item">Campus Editorial</button><button class="proto-picker-item">Campus Desk</button></nav>
+<script>
+// ---------- Mock data ----------
+const explorerItems = [
+  {id:1, name:"Cámara DSLR Canon EOS", category:"Electrónicos", img:"https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=75", desc:"Cámara de alta resolución para proyectos fotográficos."},
+  {id:2, name:"Bicicleta de montaña", category:"Deportes", img:"https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=800&q=75", desc:"Bicicleta robusta para senderos universitarios."},
+  {id:3, name:"Laptop Dell XPS 13", category:"Electrónicos", img:"https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=400&q=60", desc:"Portátil ultra‑delgado con gran rendimiento."},
+  {id:4, name:"Set de herramientas", category:"Herramientas", img:"https://images.unsplash.com/photo-1530124566582-a618bc2615dc?auto=format&fit=crop&w=800&q=75", desc:"Juego completo para trabajos de mantenimiento."},
+  {id:5, name:"Micrófono de estudio", category:"Audio", img:"https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=800&q=75", desc:"Micrófono condensador ideal para podcasts."},
+  {id:6, name:"Smartphone Samsung Galaxy", category:"Electrónicos", img:"https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=400&q=60", desc:"Teléfono con cámara de alta calidad y pantalla AMOLED."}
+];
+let requests = [];
+let chatMessages = [];
+let publishedItems = [];
+// ---------- Variant renderers ----------
+function renderExplorer(){
+  const filtered = explorerItems.filter(i=>{
+    const q=document.getElementById('search')?.value?.toLowerCase()||'';
+    const cat=document.getElementById('category')?.value||'';
+    const matchesText = i.name.toLowerCase().includes(q) || i.desc.toLowerCase().includes(q);
+    const matchesCat = !cat || i.category===cat;
+    return matchesText && matchesCat;
+  });
+  return `
+    <section class="market-hero">
+      <div class="market-hero-copy">
+        <span class="eyebrow">LendIt · Comunidad universitaria</span>
+        <h2>Lo que necesitas para el semestre, más cerca.</h2>
+        <p>Encuentra libros, equipos y herramientas que otros estudiantes prestan dentro del campus. Elige tus fechas y acuerda la entrega directamente.</p>
+      </div>
+      <aside class="hero-visual">
+        <img src="/images/ujap_escultura.jpg" alt="Escultura y campus de la Universidad José Antonio Páez" />
+        <img class="hero-visual__crest" src="/images/Logo-UJAP1.png" alt="" aria-hidden="true" />
+        <span class="hero-visual__label">Encuentros y préstamos dentro del campus</span>
+      </aside>
+    </section>
+    <div class="filter-bar" style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+      <input type="text" id="search" placeholder="Buscar artículo..." aria-label="Buscar" />
+      <select id="category" aria-label="Filtrar por categoría">
+        <option value="">Todas las categorías</option>
+        <option>Electrónicos</option>
+        <option>Deportes</option>
+        <option>Herramientas</option>
+        <option>Audio</option>
+      </select>
+    </div>
+    <div class="grid explorer">
+      ${filtered.map(i=>`
+        <div class="card" data-id="${i.id}">
+          <img src="${i.img}" alt="${i.name}" onerror="this.closest('.card').classList.add('no-image');this.remove();" />
+          <h3>${i.name}</h3>
+          <p>${i.desc}</p>
+          <button class="request-btn">Solicitar préstamo</button>
+        </div>`).join('')}
+    </div>
+    <div class="modal hidden" id="detail-modal">
+      <div class="panel" style="background:#fff;padding:1rem;border-radius:8px;max-width:400px;">
+        <h3 id="detail-title"></h3>
+        <img id="detail-img" src="" alt="" style="width:100%;height:auto;margin-bottom:0.5rem;"/>
+        <p id="detail-desc"></p>
+        <button id="detail-request">Solicitar préstamo</button>
+        <button id="detail-close">Cerrar</button>
+      </div>
+    </div>
+  `;
+}
+function renderEditorial(){
+  const featured = explorerItems.slice(0,3);
+  return `
+    <section class="editorial-screen">
+      <div class="editorial-heading">
+        <div><p class="editorial-kicker">Historias y objetos del campus</p><h2>Compartir también<br>hace comunidad.</h2></div>
+        <p>Lo que hoy le sirve a alguien, mañana puede ayudar a otro estudiante. Encuentra equipo y materiales para tu próximo proyecto.</p>
+      </div>
+      <div class="editorial-story">
+        <div class="editorial-story__photo">
+          <img src="/images/ujap_escultura.jpg" alt="La escultura del campus de la Universidad José Antonio Páez" />
+          <span>San Diego · Carabobo</span>
+        </div>
+        <div class="editorial-story__copy">
+          <span class="editorial-story__mark"><img src="/images/Logo-UJAP1.png" alt="" aria-hidden="true" /> Comunidad UJAP</span>
+          <h3>Un campus donde las ideas se prestan equipo.</h3>
+          <p>Calculadoras para un examen, una cámara para tu proyecto o herramientas para construir algo. Pide lo que necesitas y coordina la entrega en la universidad.</p>
+          <button type="button" class="editorial-story__action" onclick="setActive(0)">Explorar publicaciones <span aria-hidden="true">↗</span></button>
+        </div>
+      </div>
+      <div class="editorial-products-head"><h3>En circulación esta semana</h3><span>${featured.length} objetos destacados</span></div>
+      <div class="editorial-products">
+        ${featured.map(i=>`
+          <article class="editorial-card" data-id="${i.id}">
+            <div class="editorial-card__image"><img src="${i.img}" alt="${i.name}" onerror="this.closest('.editorial-card__image').classList.add('no-image');this.remove();" /><span>${i.category}</span></div>
+            <div class="editorial-card__body"><h4>${i.name}</h4><p>${i.desc}</p><button class="request-btn" data-id="${i.id}">Consultar préstamo <span aria-hidden="true">↗</span></button></div>
+          </article>`).join('')}
+      </div>
+    </section>
+  `;
+}
+function renderUtility(){
+  const categoryCount = new Set(explorerItems.map(i=>i.category)).size;
+  return `
+    <section class="desk-screen">
+      <div class="desk-heading"><div><p class="desk-kicker">Área de préstamos · UJAP</p><h2>Encuentra algo para hoy.</h2><p>Busca por nombre o categoría y coordina con quien lo publica.</p></div><span class="desk-date">Catálogo de muestra</span></div>
+      <div class="desk-summary" aria-label="Resumen del catálogo">
+        <div><strong>${explorerItems.length.toString().padStart(2,'0')}</strong><span>publicaciones visibles</span></div>
+        <div><strong>${categoryCount.toString().padStart(2,'0')}</strong><span>categorías</span></div>
+        <div><strong>UJAP</strong><span>entregas en el campus</span></div>
+      </div>
+      <div class="desk-layout">
+        <aside class="desk-rail">
+          <div class="desk-rail__top"><img src="/images/Logo-UJAP1.png" alt="" aria-hidden="true"/><div><strong>LendIt</strong><span>Comunidad universitaria</span></div></div>
+          <h3>Explorar</h3>
+          <label for="category-utility">Categoría</label>
+          <select id="category-utility" aria-label="Filtrar por categoría">
+            <option value="">Todas las categorías</option><option>Electrónicos</option><option>Deportes</option><option>Herramientas</option><option>Audio</option>
+          </select>
+          <div class="desk-rail__note"><span>Coordinación segura</span><p>Confirma fechas y punto de entrega por mensaje con la persona que publica.</p></div>
+        </aside>
+        <div class="desk-sheet">
+          <div class="desk-sheet__toolbar"><div><h3>Disponibles para solicitar</h3><span id="utility-count">${explorerItems.length} publicaciones</span></div><input type="search" id="search-utility" placeholder="Buscar en LendIt" aria-label="Buscar publicaciones" /></div>
+          <div class="utility-list" id="utility-body">${explorerItems.map(i=>utilityRow(i)).join('')}</div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+function utilityRow(i){
+  return `<article class="utility-row" data-id="${i.id}"><img src="${i.img}" alt="${i.name}" onerror="this.closest('.utility-row').classList.add('no-image');this.remove();"/><div class="utility-row__main"><span>${i.category}</span><h4>${i.name}</h4><p>${i.desc}</p></div><button class="request-btn" data-id="${i.id}">Solicitar <span aria-hidden="true">↗</span></button></article>`;
+}
+const variants = [renderExplorer, renderEditorial, renderUtility];
+// ----- Picker wiring (verbatim) -----
+const stage = document.getElementById('stage');
+const picker = document.querySelector('.proto-picker');
+const highlight = picker.querySelector('.proto-picker-highlight');
+const items = [...picker.querySelectorAll('.proto-picker-item:not(.proto-picker-replay)')];
+let current = 0;
+function moveHighlight(){
+  const el = items[current];
+  highlight.style.width = el.offsetWidth + 'px';
+  highlight.style.transform = `translateX(${el.offsetLeft}px)`;
+}
+function mount(i){
+  stage.innerHTML='';
+  requestAnimationFrame(()=>{ stage.innerHTML = variants[i](); attachVariantLogic(); });
+}
+function setActive(i){
+  if(i<0||i>=variants.length) return;
+  current=i;
+  document.body.dataset.variant=['explorer','editorial','utility'][i];
+  items.forEach((el,j)=>{ el.toggleAttribute('data-active',j===i); if(j===i) el.setAttribute('aria-current','true'); else el.removeAttribute('aria-current');});
+  moveHighlight();
+  const url=new URL(location); url.searchParams.set('v',i+1); history.replaceState(null,'',url);
+  mount(i);
+}
+items.forEach((el,i)=>el.addEventListener('click',()=>setActive(i)));
+window.addEventListener('resize',moveHighlight);
+window.addEventListener('keydown',e=>{ if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)||e.target.isContentEditable) return; if(e.metaKey||e.ctrlKey||e.altKey) return; const num=parseInt(e.key,10); if(num>=1&&num<=variants.length) setActive(num-1); else if(e.key==='ArrowRight') setActive((current+1)%variants.length); else if(e.key==='ArrowLeft') setActive((current-1+variants.length)%variants.length); });
+setActive((parseInt(new URLSearchParams(location.search).get('v'),10)||1)-1);
+requestAnimationFrame(()=>requestAnimationFrame(()=>picker.setAttribute('data-ready','')));
+// ----- Variant‑specific interactions -----
+function showFeedback(message){
+  const fb=document.getElementById('feedback');
+  fb.textContent=message;
+  fb.classList.add('show');
+  setTimeout(()=>{fb.classList.remove('show');},2000);
+}
+
+function attachVariantLogic(){
+  // Navigation – attach once
+  if(!window.__navInitialized){
+    const navButtons=document.querySelectorAll('header nav.main-nav button');
+    navButtons.forEach(btn=>{ btn.addEventListener('click',()=>{ navButtons.forEach(b=>b.classList.remove('active')); btn.classList.add('active'); showSection(btn.dataset.section);});});
+    window.__navInitialized=true;
+  }
+  function showSection(section){
+    // reset stage and then render appropriate view
+    if(section==='explore'){
+      mount(current);
+    } else if(section==='requests'){
+      const list = requests.map(r=>`<li>${r.name} (solicitado)</li>`).join('')||'<li>No hay solicitudes.</li>';
+      stage.innerHTML=`<h2>Mis solicitudes</h2><ul>${list}</ul>`;
+    } else if(section==='messages'){
+      stage.innerHTML=`<h2>Mensajes</h2><div class="chat" style="display:flex;flex-direction:column;height:400px;">
+        <div id="chat-messages" style="flex:1;overflow:auto;margin-bottom:0.5rem;border:1px solid #ddd;padding:0.5rem;">
+          ${chatMessages.map(m=>`<p><strong>${m.from}:</strong> ${m.text}</p>`).join('')}
+        </div>
+        <div class="chat-input" style="display:flex;gap:0.5rem;">
+          <input id="chat-input" placeholder="Escribe un mensaje..." aria-label="Mensaje"/>
+          <button id="send-chat">Enviar</button>
+        </div>
+      </div>`;
+      initChat();
+    } else if(section==='publish'){
+      stage.innerHTML=`<h2>Publicar artículo</h2>
+        <form id="publish-form">
+          <label>Nombre:<br/><input name="name" required/></label><br/>
+          <label>Descripción:<br/><textarea name="desc" required></textarea></label><br/>
+          <label>Imagen URL:<br/><input name="img" type="url" required/></label><br/>
+          <label>Categoria:<br/><select name="category"><option>Electrónicos</option><option>Deportes</option><option>Herramientas</option><option>Audio</option></select></label><br/>
+          <button type="submit">Publicar</button>
+        </form>`;
+      initPublish();
+    }
+  }
+  // Variant‑specific UI wiring
+  // Explorer modal handling
+  const detailModal=document.getElementById('detail-modal');
+  if(detailModal && !stage.dataset.detailHandler){
+    stage.addEventListener('click',e=>{
+      if(e.target.classList.contains('request-btn')){
+        const card=e.target.closest('.card')||e.target.closest('tr');
+        const id=card.dataset.id;
+        const item=explorerItems.find(it=>it.id==id);
+        if(item){
+          // show detail modal
+          const modal=document.getElementById('detail-modal');
+          modal.querySelector('#detail-title').textContent=item.name;
+          modal.querySelector('#detail-img').src=item.img;
+          modal.querySelector('#detail-desc').textContent=item.desc;
+          modal.querySelector('#detail-request').onclick=()=>{ addRequest(item); modal.classList.add('hidden'); };
+          modal.classList.remove('hidden');
+        }
+      }
+    });
+    stage.dataset.detailHandler='true';
+  }
+  if(detailModal) detailModal.querySelector('#detail-close').onclick=()=>detailModal.classList.add('hidden');
+  // Explorer card button (quick request)
+  if(!detailModal) stage.querySelectorAll('.request-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const card=btn.closest('[data-id]');
+      const id=card?.dataset.id||btn.dataset.id;
+      const item=explorerItems.find(it=>it.id==id);
+      if(item) addRequest(item);
+    });
+  });
+  // Utility filter (simple text filter across name)
+  const searchU=document.getElementById('search-utility');
+  const catU=document.getElementById('category-utility');
+  if(searchU||catU){
+    const filterUtility=()=>{
+      const q=(searchU?.value||'').toLowerCase();
+      const cat=catU?.value||'';
+      const list=document.getElementById('utility-body');
+      const filtered=explorerItems.filter(i=>{
+        const matchText=i.name.toLowerCase().includes(q)||i.desc.toLowerCase().includes(q);
+        const matchCat=!cat||i.category===cat;
+        return matchText && matchCat;
+      });
+      list.innerHTML=filtered.map(utilityRow).join('')||'<p class="utility-empty">No encontramos publicaciones con esos filtros.</p>';
+      document.getElementById('utility-count').textContent=`${filtered.length} publicaciones`;
+      // re‑attach request listeners for new rows
+      list.querySelectorAll('.request-btn').forEach(b=>b.addEventListener('click',()=>{
+        const row=b.closest('.utility-row');
+        const id=row.dataset.id;
+        const item=explorerItems.find(it=>it.id==id);
+        if(item) addRequest(item);
+      }));
+    };
+    searchU?.addEventListener('input',filterUtility);
+    catU?.addEventListener('change',filterUtility);
+    filterUtility();
+  }
+}
+function addRequest(item){
+  if(!requests.find(r=>r.id===item.id)) requests.push(item);
+  showFeedback(`${item.name} agregado a tus solicitudes.`);
+}
+function initChat(){
+  const msgs=document.getElementById('chat-messages');
+  const input=document.getElementById('chat-input');
+  document.getElementById('send-chat').addEventListener('click',()=>{
+    const text=input.value.trim();
+    if(text){
+      chatMessages.push({from:'Tú',text});
+      const p=document.createElement('p'); p.innerHTML=`<strong>Tú:</strong> ${text}`; msgs.appendChild(p);
+      input.value='';
+    }
+  });
+}
+function initPublish(){
+  document.getElementById('publish-form').addEventListener('submit',e=>{
+    e.preventDefault();
+    const form=e.target;
+    const newItem={
+      id:explorerItems.length+1,
+      name:form.name.value,
+      desc:form.desc.value,
+      img:form.img.value,
+      category:form.category.value
+    };
+    explorerItems.push(newItem);
+    showFeedback('Artículo publicado y disponible en el catálogo.');
+    form.reset();
+  });
+}
+</script>
+</body>
+</html>

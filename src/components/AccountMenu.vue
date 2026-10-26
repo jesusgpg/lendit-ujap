@@ -1,38 +1,59 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { push } from 'notivue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { apiRequest } from '../lib/api'
-import { uploadItemPhoto } from '../lib/storage'
-import { fontSize, theme, colorblind, type FontSize, type ThemeMode } from '../lib/accessibility'
-import ModalDialog from './ModalDialog.vue'
-import PhotoDropzone from './PhotoDropzone.vue'
+import AccountMenuIcon from './AccountMenuIcon.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
-const emit = defineEmits<{ (e: 'logout'): void }>()
+const route = useRoute()
+const emit = defineEmits<{ (e: 'logout'): void; (e: 'open'): void }>()
 
 const isMenuOpen = ref(false)
 const menuRoot = ref<HTMLElement | null>(null)
-const activeModal = ref<'profile' | 'calendar' | 'accessibility' | 'preferences' | 'languages' | null>(null)
+const menuPanel = ref<HTMLElement | null>(null)
+const menuTrigger = ref<HTMLButtonElement | null>(null)
+const menuId = useId()
+const keyboardOpening = ref(false)
+const roleLabel = computed(() => authStore.isAdmin ? 'Administración' : authStore.user?.role === 'PROFESSOR' ? 'Profesor' : authStore.user?.role === 'STUDENT' ? 'Estudiante' : 'Comunidad UJAP')
 
-function toggleMenu() {
-  isMenuOpen.value = !isMenuOpen.value
-}
-
-function openModal(modal: typeof activeModal.value) {
-  activeModal.value = modal
+function closeMenu(restoreFocus = false) {
   isMenuOpen.value = false
+  if (restoreFocus) menuTrigger.value?.focus({ preventScroll: true })
+}
+function menuActions() {
+  return Array.from(menuPanel.value?.querySelectorAll<HTMLElement>('button:not([disabled]),a[href]') ?? [])
+}
+async function openFromKeyboard(last = false) {
+  keyboardOpening.value = true
+  isMenuOpen.value = true
+  emit('open')
+  await nextTick()
+  const items = menuActions()
+  ;(last ? items[items.length - 1] : items[0])?.focus()
+}
+function toggleMenu(event: MouseEvent) {
+  if (isMenuOpen.value) { closeMenu(); return }
+  if (event.detail === 0) { void openFromKeyboard(); return }
+  keyboardOpening.value = false
+  isMenuOpen.value = true
+  emit('open')
+}
+function handleMenuKeydown(event: KeyboardEvent) {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const items = menuActions()
+  const index = items.indexOf(document.activeElement as HTMLElement)
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+  items[next]?.focus()
+}
+function handleEscape(event: KeyboardEvent) {
+  if (isMenuOpen.value && event.key === 'Escape') { event.preventDefault(); closeMenu(true) }
 }
 
-function navigateTo(path: string) {
-  isMenuOpen.value = false
-  void router.push(path)
-}
-
-function closeModal() {
-  activeModal.value = null
+function openAccount() {
+  closeMenu()
+  void router.push('/cuenta/perfil')
 }
 
 function handleClickOutside(event: MouseEvent) {
@@ -40,636 +61,116 @@ function handleClickOutside(event: MouseEvent) {
     isMenuOpen.value = false
   }
 }
+function handleFocusOutside(event: FocusEvent) {
+  if (isMenuOpen.value && menuRoot.value && !menuRoot.value.contains(event.target as Node)) closeMenu()
+}
 
-onMounted(() => document.addEventListener('click', handleClickOutside))
-onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
+watch(() => route.fullPath, () => closeMenu())
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+  document.addEventListener('focusin', handleFocusOutside)
+  document.addEventListener('keydown', handleEscape)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('focusin', handleFocusOutside)
+  document.removeEventListener('keydown', handleEscape)
+})
 
 function handleLogout() {
   // El emit debe correr de forma síncrona: logout() pone user=null y Vue desmonta
   // este componente en el siguiente microtask, lo que descartaría el evento.
   isMenuOpen.value = false
-  if (typeof router.currentRoute.value.meta.requiredPermission === 'string') {
-    void router.replace({ name: 'landing' })
-  }
   emit('logout')
-  void authStore.logout().catch(() => {
+  const logout = authStore.logout()
+  void router.replace({ name: 'landing' })
+  void logout.catch(() => {
     // logout() limpia la sesión local aunque el cierre remoto falle.
   })
 }
 
-// ---------- perfil ----------
-const profileForm = ref({ firstName: '', lastName: '', phone: '', photoUrl: '' })
-const isSavingProfile = ref(false)
-const profileError = ref('')
-const profileSaved = ref(false)
-const photoPreview = ref('')
-
-function openProfileModal() {
-  const user = authStore.user
-  profileForm.value = {
-    firstName: user?.firstName ?? '',
-    lastName: user?.lastName ?? '',
-    phone: user?.phone ?? '',
-    photoUrl: user?.photo ?? '',
-  }
-  photoPreview.value = user?.photo ?? ''
-  profileError.value = ''
-  profileSaved.value = false
-  openModal('profile')
-}
-
-function handlePhotoUpdate(dataUrl: string) {
-  photoPreview.value = dataUrl
-  profileForm.value.photoUrl = dataUrl
-  profileError.value = ''
-}
-
-async function saveProfile() {
-  isSavingProfile.value = true
-  profileError.value = ''
-  try {
-    // Un data URL recién capturado por PhotoDropzone se sube a Storage antes de
-    // guardarlo: persistir el base64 crudo en el perfil infla el registro sin necesidad.
-    const photoUrl = profileForm.value.photoUrl.startsWith('data:')
-      ? await uploadItemPhoto(profileForm.value.photoUrl)
-      : profileForm.value.photoUrl || null
-
-    await apiRequest('/api/me', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        firstName: profileForm.value.firstName,
-        lastName: profileForm.value.lastName,
-        phone: profileForm.value.phone,
-        photoUrl,
-      }),
-    })
-    await authStore.syncProfile()
-    profileSaved.value = true
-    push.success({ title: 'Perfil actualizado', message: 'Tus cambios se guardaron correctamente.' })
-  } catch (error) {
-    profileError.value = error instanceof Error ? error.message : 'No se pudo guardar el perfil.'
-    push.error({ title: 'No se guardó el perfil', message: profileError.value })
-  } finally {
-    isSavingProfile.value = false
-  }
-}
-
-// ---------- accesibilidad ----------
-const fontSizeOptions: { value: FontSize; label: string }[] = [
-  { value: 'normal', label: 'A' },
-  { value: 'large', label: 'A' },
-  { value: 'larger', label: 'A' },
-]
-const themeOptions: { value: ThemeMode; label: string }[] = [
-  { value: 'light', label: 'Claro' },
-  { value: 'dark', label: 'Oscuro' },
-]
 </script>
 
 <template>
-  <div ref="menuRoot" class="account-menu">
-    <button class="account-menu__trigger" type="button" @click="toggleMenu">
+  <div ref="menuRoot" class="account-menu" :class="{'account-menu--keyboard':keyboardOpening}">
+    <button ref="menuTrigger" class="account-menu__trigger" type="button" :aria-expanded="isMenuOpen" :aria-controls="menuId" :aria-label="`${isMenuOpen ? 'Cerrar' : 'Abrir'} menú de cuenta de ${authStore.user?.name}`" @click="toggleMenu" @keydown.down.prevent="openFromKeyboard()" @keydown.up.prevent="openFromKeyboard(true)">
       <span class="account-menu__avatar">
         <img v-if="authStore.user?.photo" :src="authStore.user.photo" alt="" />
         <span v-else>{{ authStore.user?.name?.charAt(0) }}</span>
       </span>
       <span class="account-menu__name">{{ authStore.user?.name }}</span>
-      <span class="account-menu__chevron" :class="{ 'account-menu__chevron--open': isMenuOpen }">⌄</span>
+      <AccountMenuIcon name="down" class="account-menu__chevron" :class="{ 'account-menu__chevron--open': isMenuOpen }" />
     </button>
 
     <Transition name="account-menu-fade">
-      <div v-if="isMenuOpen" class="account-menu__panel">
-        <div class="account-menu__header">
-          <strong>{{ authStore.user?.name }}</strong>
-          <span>{{ authStore.user?.email }}</span>
+      <section v-if="isMenuOpen" :id="menuId" ref="menuPanel" class="account-menu__panel" aria-label="Opciones de tu cuenta" @keydown="handleMenuKeydown">
+        <button class="account-menu__identity" type="button" @click="openAccount">
+          <span class="account-menu__avatar account-menu__avatar--large"><img v-if="authStore.user?.photo" :src="authStore.user.photo" alt="" /><span v-else>{{ authStore.user?.name?.charAt(0) }}</span></span>
+          <span class="account-menu__identity-copy"><strong>{{ authStore.user?.name }}</strong><span>{{ authStore.user?.email }}</span><small>{{ roleLabel }} · Ver perfil</small></span>
+          <AccountMenuIcon name="chevron" />
+        </button>
+        <nav class="account-menu__shortcuts" aria-label="Accesos principales">
+          <router-link :to="authStore.isAdmin ? '/admin' : '/inicio'" @click="closeMenu()"><AccountMenuIcon :name="authStore.isAdmin ? 'admin' : 'home'" /><span>{{ authStore.isAdmin ? 'Administración' : 'Mi inicio' }}</span></router-link>
+          <router-link :to="authStore.isAdmin ? '/catalogo' : '/mensajes'" @click="closeMenu()"><AccountMenuIcon :name="authStore.isAdmin ? 'search' : 'messages'" /><span>{{ authStore.isAdmin ? 'Explorar' : 'Mensajes' }}</span></router-link>
+        </nav>
+        <nav v-if="!authStore.isAdmin" class="account-menu__activity" aria-label="Tu actividad">
+          <router-link to="/catalogo" @click="closeMenu()"><AccountMenuIcon name="search" />Explorar objetos</router-link>
+          <router-link to="/publicar" @click="closeMenu()"><AccountMenuIcon name="plus" />Publicar objeto</router-link>
+          <router-link to="/mis-publicaciones" @click="closeMenu()"><AccountMenuIcon name="objects" />Mis publicaciones</router-link>
+          <router-link to="/solicitudes" @click="closeMenu()"><AccountMenuIcon name="requests" />Solicitudes</router-link>
+        </nav>
+        <div class="account-menu__settings">
+          <button class="account-menu__item" type="button" @click="openAccount"><AccountMenuIcon name="settings" /><span>Mi cuenta</span><AccountMenuIcon name="chevron" class="account-menu__trailing" /></button>
         </div>
-
-        <button class="account-menu__item" type="button" @click="navigateTo('/catalogo')">
-          <span class="account-menu__icon">⌕</span> Explorar objetos
-        </button>
-        <button class="account-menu__item" type="button" @click="navigateTo('/publicar')">
-          <span class="account-menu__icon">＋</span> Publicar objeto
-        </button>
-        <button class="account-menu__item" type="button" @click="navigateTo('/mis-publicaciones')">
-          <span class="account-menu__icon">▤</span> Mis publicaciones
-        </button>
-        <button class="account-menu__item" type="button" @click="navigateTo('/solicitudes')">
-          <span class="account-menu__icon">↔</span> Solicitudes
-        </button>
-
-        <div class="account-menu__divider"></div>
-
-        <button class="account-menu__item" type="button" @click="openProfileModal">
-          <span class="account-menu__icon">☺</span> Perfil
-        </button>
-        <button class="account-menu__item" type="button" @click="openModal('calendar')">
-          <span class="account-menu__icon">▦</span> Calendario
-        </button>
-        <button class="account-menu__item" type="button" @click="openModal('accessibility')">
-          <span class="account-menu__icon">◑</span> Accesibilidad
-        </button>
-        <button class="account-menu__item" type="button" @click="openModal('preferences')">
-          <span class="account-menu__icon">⚙</span> Preferencias
-        </button>
-        <button class="account-menu__item" type="button" @click="openModal('languages')">
-          <span class="account-menu__icon">🌐</span> Idiomas
-        </button>
-
-        <div class="account-menu__divider"></div>
-
-        <button class="account-menu__item account-menu__item--danger" type="button" @click="handleLogout">
-          <span class="account-menu__icon">⏻</span> Cerrar sesión
-        </button>
-      </div>
+        <div class="account-menu__footer"><button class="account-menu__item account-menu__item--danger" type="button" @click="handleLogout"><AccountMenuIcon name="logout" /><span>Cerrar sesión</span></button></div>
+      </section>
     </Transition>
 
-    <!-- Perfil -->
-    <ModalDialog v-if="activeModal === 'profile'" wide title="Tu perfil" @close="closeModal">
-      <form class="account-form" @submit.prevent="saveProfile">
-        <div class="account-form__photo">
-          <PhotoDropzone :model-value="photoPreview" @update:model-value="handlePhotoUpdate" />
-        </div>
-
-        <div class="account-form__row">
-          <label class="account-form__field">
-            <span>Nombre</span>
-            <input v-model="profileForm.firstName" type="text" required />
-          </label>
-          <label class="account-form__field">
-            <span>Apellido</span>
-            <input v-model="profileForm.lastName" type="text" required />
-          </label>
-        </div>
-        <label class="account-form__field">
-          <span>Correo</span>
-          <input :value="authStore.user?.email" type="email" disabled />
-        </label>
-        <label class="account-form__field">
-          <span>Carrera</span>
-          <input :value="authStore.user?.career" type="text" disabled />
-        </label>
-        <label class="account-form__field">
-          <span>Teléfono</span>
-          <input v-model="profileForm.phone" type="tel" required />
-        </label>
-        <p v-if="profileError" class="account-form__error">{{ profileError }}</p>
-        <button class="btn btn--primary account-form__submit" type="submit" :disabled="isSavingProfile">
-          {{ isSavingProfile ? 'Guardando…' : profileSaved ? '✓ Guardado' : 'Guardar cambios' }}
-        </button>
-      </form>
-    </ModalDialog>
-
-    <!-- Calendario -->
-    <ModalDialog v-else-if="activeModal === 'calendar'" title="Tu calendario" @close="closeModal">
-      <div class="account-empty">
-        <p>Aún no tienes préstamos ni solicitudes con fecha activa.</p>
-        <p class="account-empty__hint">Cuando pidas o prestes un objeto, sus fechas de entrega y devolución van a aparecer aquí.</p>
-      </div>
-    </ModalDialog>
-
-    <!-- Accesibilidad -->
-    <ModalDialog v-else-if="activeModal === 'accessibility'" title="Accesibilidad" @close="closeModal">
-      <div class="account-settings">
-        <div class="account-settings__group">
-          <span class="account-settings__label">Tamaño de fuente</span>
-          <div class="account-settings__options">
-            <button
-              v-for="(option, index) in fontSizeOptions"
-              :key="option.value"
-              type="button"
-              class="account-settings__pill"
-              :class="{ 'account-settings__pill--active': fontSize === option.value }"
-              :style="{ fontSize: `${14 + index * 3}px` }"
-              @click="fontSize = option.value"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-        </div>
-
-        <div class="account-settings__group">
-          <span class="account-settings__label">Tema</span>
-          <div class="account-settings__options">
-            <button
-              v-for="option in themeOptions"
-              :key="option.value"
-              type="button"
-              class="account-settings__pill"
-              :class="{ 'account-settings__pill--active': theme === option.value }"
-              @click="theme = option.value"
-            >
-              {{ option.label }}
-            </button>
-          </div>
-        </div>
-
-        <label class="account-settings__toggle">
-          <span class="account-settings__toggle-text">
-            Modo daltónico
-            <small>Paleta azul/naranja de alto contraste</small>
-          </span>
-          <span class="account-settings__switch" :class="{ 'account-settings__switch--on': colorblind }">
-            <input v-model="colorblind" type="checkbox" />
-            <span class="account-settings__thumb"></span>
-          </span>
-        </label>
-      </div>
-    </ModalDialog>
-
-    <!-- Preferencias -->
-    <ModalDialog v-else-if="activeModal === 'preferences'" title="Preferencias" @close="closeModal">
-      <div class="account-settings">
-        <div class="account-settings__group">
-          <span class="account-settings__label">Cuenta</span>
-          <p class="account-settings__row"><strong>Rol:</strong> {{ authStore.user?.role }}</p>
-          <p class="account-settings__row"><strong>Carrera:</strong> {{ authStore.user?.career }}</p>
-        </div>
-        <p class="account-empty__hint">
-          Las opciones de accesibilidad (fuente, tema, modo daltónico) están en el menú "Accesibilidad". Más
-          preferencias de cuenta llegarán más adelante.
-        </p>
-      </div>
-    </ModalDialog>
-
-    <!-- Idiomas -->
-    <ModalDialog v-else-if="activeModal === 'languages'" title="Idioma" @close="closeModal">
-      <ul class="language-list">
-        <li class="language-item language-item--active">
-          <span>Español</span>
-          <span class="language-item__badge">Activo</span>
-        </li>
-        <li class="language-item">
-          <span>English</span>
-          <span class="language-item__badge language-item__badge--soon">Próximamente</span>
-        </li>
-        <li class="language-item">
-          <span>Português</span>
-          <span class="language-item__badge language-item__badge--soon">Próximamente</span>
-        </li>
-      </ul>
-    </ModalDialog>
   </div>
 </template>
 
 <style scoped>
-.account-menu {
-  position: relative;
-}
+.account-menu { position:relative; font-family:var(--sans); }
+.account-menu__trigger { display:flex;align-items:center;gap:9px;min-height:44px;padding:5px 10px 5px 5px;border-radius:999px;border:1px solid transparent;background:transparent;cursor:pointer;color:var(--ink);transition:background 150ms ease,border-color 150ms ease; }
+.account-menu__trigger:hover,.account-menu__trigger[aria-expanded=true] { border-color:var(--line);background:var(--paper); }
+.account-menu__avatar { display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;overflow:hidden;background:var(--navy);color:var(--on-dark);font:600 15px var(--sans);flex-shrink:0; }
+.account-menu__avatar img { width:100%;height:100%;object-fit:cover; }
+.account-menu__avatar--large { width:42px;height:42px;font-size:18px; }
+.account-menu__name { max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 14px var(--sans);color:var(--ink); }
+.account-menu__chevron { width:14px;height:14px;color:var(--ink-soft);transition:transform 160ms var(--ease-out); }
+.account-menu__chevron--open { transform:rotate(180deg); }
+.account-menu__panel { position:absolute;top:calc(100% + 12px);right:0;width:336px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 100px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:8px;border:1px solid var(--line);border-radius:18px;background:var(--paper);color:var(--ink);box-shadow:0 14px 40px color-mix(in srgb,var(--ink) 12%,transparent);z-index:60;transform-origin:top right; }
+.account-menu__identity { display:flex;align-items:center;gap:12px;width:100%;padding:14px 12px 18px;background:none;border:0;text-align:left;border-radius:12px;cursor:pointer;color:var(--ink); }
+.account-menu__identity:hover { background:var(--surface-soft); }
+.account-menu__identity>svg { flex-shrink:0;color:var(--ink-soft);width:15px;height:15px; }
+.account-menu__identity-copy { display:flex;flex-direction:column;gap:4px;min-width:0;flex:1; }
+.account-menu__identity-copy strong { font-size:15px;line-height:1.4;overflow-wrap:anywhere; }
+.account-menu__identity-copy>span { font-size:12px;line-height:1.4;color:var(--ink-soft);overflow-wrap:anywhere; }
+.account-menu__identity-copy small { font-size:11px;line-height:1.4;color:var(--crimson-dark);font-weight:500; }
+.account-menu__shortcuts { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 8px 14px; }
+.account-menu__shortcuts a { display:flex;align-items:center;gap:9px;padding:14px 12px;min-height:52px;background:var(--surface-soft);border-radius:10px;color:var(--ink);text-decoration:none;font-size:13px;font-weight:600;transition:background 150ms ease; }
+.account-menu__shortcuts svg { color:var(--navy);flex-shrink:0; }
+.account-menu__activity { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;padding:8px 4px 12px;border-top:1px solid var(--line); }
+.account-menu__activity a { display:flex;align-items:center;gap:9px;padding:10px 8px;min-height:44px;color:var(--ink);text-decoration:none;font-size:12px;line-height:1.4;border-radius:8px;transition:background 150ms ease; }
+.account-menu__activity svg { flex-shrink:0;color:var(--ink-soft);width:17px;height:17px; }
+.account-menu__settings { border-top:1px solid var(--line);padding:10px 4px; }
+.account-menu__section-label { font:500 12px/1.5 var(--sans);color:var(--ink-soft);padding:0 10px 6px;margin:0; }
+.account-menu__item { display:flex;align-items:center;gap:12px;min-height:44px;padding:11px 10px;width:100%;border:0;border-radius:9px;background:none;color:var(--ink);text-align:left;cursor:pointer;font:400 14px/1.4 var(--sans);transition:background 150ms ease,color 150ms ease; }
+.account-menu__item>svg { color:var(--ink-soft);flex-shrink:0; }
+.account-menu__item>span { flex:1; }
+.account-menu__item>small { font-size:12px;color:var(--ink-soft); }
+.account-menu__item>.account-menu__trailing { width:13px;height:13px; }
+.account-menu__item:hover,.account-menu__activity a:hover,.account-menu__shortcuts a:hover { background:var(--surface-soft); }
+.account-menu__shortcuts a:hover { background:var(--paper-3); }
+.account-menu__footer { border-top:1px solid var(--line);padding:8px 4px 2px; }
+.account-menu__item--danger,.account-menu__item--danger>svg { color:var(--crimson-dark); }
+.account-menu__item--danger:hover { background:var(--crimson-bg); }
+.account-menu :is(button,a):focus-visible { outline:2px solid var(--crimson);outline-offset:2px; }
+.account-menu-fade-enter-active { transition:opacity 160ms ease,transform 180ms var(--ease-out); }
+.account-menu-fade-leave-active { transition:opacity 100ms ease,transform 100ms var(--ease-out); }
+.account-menu-fade-enter-from,.account-menu-fade-leave-to { opacity:0;transform:translateY(-4px) scale(.98); }
+.account-menu--keyboard .account-menu-fade-enter-active,.account-menu--keyboard .account-menu-fade-leave-active { transition:none; }
+@media(max-width:640px) { .account-menu__panel { position:fixed;top:76px;left:12px;right:12px;width:auto;max-height:calc(100dvh - 92px);transform-origin:top right; } .account-menu__trigger { padding:5px;gap:5px; } .account-menu__name { max-width:86px;font-size:12px; } .account-menu__activity a { font-size:13px; } }
+@media(prefers-reduced-motion:reduce) { .account-menu__chevron,.account-menu__item,.account-menu__shortcuts a,.account-menu__activity a,.account-menu-fade-enter-active,.account-menu-fade-leave-active { transition:none; } .account-menu-fade-enter-from,.account-menu-fade-leave-to { transform:none; } }
 
-.account-menu__trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 6px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.account-menu__trigger:hover {
-  border-color: var(--line);
-  background: color-mix(in srgb, var(--paper) 60%, transparent);
-}
-
-.account-menu__avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: var(--navy);
-  color: var(--on-dark);
-  font-family: var(--display);
-  font-weight: 650;
-  font-size: 13px;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-.account-menu__avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.account-menu__name {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.account-menu__chevron {
-  font-size: 12px;
-  color: var(--ink-faint);
-  transition: transform 0.15s ease;
-}
-
-.account-menu__chevron--open {
-  transform: rotate(180deg);
-}
-
-.account-menu__panel {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  width: 260px;
-  border-radius: 16px;
-  background: var(--paper-2);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  padding: 10px;
-  z-index: 60;
-}
-
-.account-menu__header {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 12px 12px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--line);
-}
-
-.account-menu__header strong {
-  font-size: 14px;
-  color: var(--ink);
-}
-
-.account-menu__header span {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-
-.account-menu__item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  border: none;
-  background: transparent;
-  border-radius: 10px;
-  font: inherit;
-  font-size: 13.5px;
-  color: var(--ink-soft);
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.account-menu__item:hover {
-  background: color-mix(in srgb, var(--paper) 70%, transparent);
-  color: var(--ink);
-}
-
-.account-menu__icon {
-  width: 18px;
-  text-align: center;
-  color: var(--gold);
-}
-
-.account-menu__divider {
-  height: 1px;
-  background: var(--line);
-  margin: 6px 4px;
-}
-
-.account-menu__item--danger {
-  color: var(--crimson-dark);
-}
-
-.account-menu__item--danger .account-menu__icon {
-  color: var(--crimson);
-}
-
-.account-menu-fade-enter-active,
-.account-menu-fade-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.account-menu-fade-enter-from,
-.account-menu-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-/* ---------- shared modal form bits ---------- */
-.account-form {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.account-form__photo {
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
-}
-
-.account-form__row {
-  display: flex;
-  gap: 12px;
-}
-
-.account-form__field {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.account-form__field input {
-  font: inherit;
-  padding: 11px 14px;
-  border-radius: 10px;
-  border: 1.5px solid var(--line-strong);
-  background: var(--paper);
-  color: var(--ink);
-}
-
-.account-form__field input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.account-form__field input:focus {
-  outline: none;
-  border-color: var(--crimson);
-}
-
-.account-form__error {
-  font-size: 13px;
-  color: var(--crimson-dark);
-}
-
-.account-form__submit {
-  width: 100%;
-}
-
-.account-empty {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 0;
-}
-
-.account-empty__hint {
-  font-size: 13px;
-  color: var(--ink-faint);
-  line-height: 1.5;
-}
-
-.account-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.account-settings__group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.account-settings__label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.account-settings__options {
-  display: flex;
-  gap: 8px;
-}
-
-.account-settings__pill {
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1.5px solid var(--line-strong);
-  background: var(--paper);
-  color: var(--ink-soft);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.account-settings__pill--active {
-  border-color: var(--crimson);
-  background: var(--crimson-bg);
-  color: var(--crimson-dark);
-}
-
-.account-settings__toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  cursor: pointer;
-}
-
-.account-settings__toggle-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13.5px;
-  color: var(--ink-soft);
-}
-
-.account-settings__toggle-text small {
-  font-size: 12px;
-  color: var(--ink-faint);
-  font-weight: 400;
-}
-
-.account-settings__switch {
-  flex-shrink: 0;
-  position: relative;
-  width: 44px;
-  height: 24px;
-  border-radius: 999px;
-  background: var(--line-strong);
-  transition: background 0.2s ease;
-}
-
-.account-settings__switch input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-}
-
-.account-settings__switch--on {
-  background: var(--crimson);
-}
-
-.account-settings__thumb {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--paper);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.account-settings__switch--on .account-settings__thumb {
-  transform: translateX(20px);
-}
-
-.account-settings__switch:focus-within {
-  box-shadow: 0 0 0 3px var(--crimson-bg);
-}
-
-.account-settings__row {
-  font-size: 13.5px;
-  color: var(--ink-soft);
-  margin: 0;
-}
-
-.language-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.language-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-radius: 12px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  font-size: 14px;
-  color: var(--ink-faint);
-}
-
-.language-item--active {
-  border-color: var(--gold-light);
-  background: var(--gold-bg);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.language-item__badge {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--gold);
-}
-
-.language-item__badge--soon {
-  color: var(--ink-faint);
-}
 </style>

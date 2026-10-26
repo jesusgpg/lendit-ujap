@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { prisma } from './prisma.js'
-import { hasPermission, type ApiRequest, type ApiResponse, type AuthenticatedProfile } from './auth.js'
+import { hasPermission, isTeacherApplicant, type ApiRequest, type ApiResponse, type AuthenticatedProfile } from './auth.js'
 import { canManageOwnedResource, canSeeRestrictedItem, requestDateError } from './workflowRules.js'
 
 const newRequestSchema = z.object({
@@ -33,7 +33,16 @@ const requestInclude = {
     },
   },
   requester: { select: { id: true, firstName: true, lastName: true, email: true } },
-  payment: { select: { status: true, amount: true, currency: true } },
+  payment: {
+    select: {
+      id: true,
+      status: true,
+      amount: true,
+      currency: true,
+      provider: true,
+      providerReference: true,
+    },
+  },
   loan: { select: { id: true, status: true, returnedAt: true } },
 } as const
 
@@ -55,7 +64,14 @@ type RequestRecord = {
   endsAt: Date
   message: string | null
   status: string
-  payment: { status: string; amount: { toString: () => string }; currency: string } | null
+  payment: {
+    id: string
+    status: string
+    amount: { toString: () => string }
+    currency: string
+    provider: string | null
+    providerReference: string | null
+  } | null
   loan: { id: string; status: string; returnedAt: Date | null } | null
   createdAt: Date
 }
@@ -75,6 +91,9 @@ class RequestWorkflowError extends Error {
 }
 
 function serializeRequest(request: RequestRecord, profileId: string) {
+  const isPastStart = request.status === 'PENDING' && request.startsAt.getTime() <= Date.now()
+  const status = isPastStart ? 'EXPIRED' : request.status
+
   return {
     id: request.id,
     item: {
@@ -100,13 +119,16 @@ function serializeRequest(request: RequestRecord, profileId: string) {
     startsAt: request.startsAt.toISOString(),
     endsAt: request.endsAt.toISOString(),
     message: request.message,
-    status: request.status,
+    status,
     isOwner: request.item.ownerId === profileId,
     payment: request.payment
       ? {
+          id: request.payment.id,
           status: request.payment.status,
           amount: Number(request.payment.amount.toString()),
           currency: request.payment.currency,
+          provider: request.payment.provider,
+          providerReference: request.payment.providerReference,
         }
       : null,
     loan: request.loan
@@ -177,6 +199,14 @@ export async function handleRequestMutation(req: ApiRequest, res: ApiResponse, p
 }
 
 async function createRequest(req: ApiRequest, res: ApiResponse, profile: AuthenticatedProfile) {
+  if (isTeacherApplicant(profile)) {
+    return res.status(403).json({
+      ok: false,
+      error: 'TEACHER_VERIFICATION_REQUIRED',
+      message: 'No puedes solicitar objetos mientras tu acreditación docente no esté aprobada.',
+    })
+  }
+
   const parsed = newRequestSchema.safeParse(req.body ?? {})
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'INVALID_REQUEST' })
@@ -204,7 +234,7 @@ async function createRequest(req: ApiRequest, res: ApiResponse, profile: Authent
   if (item.status !== 'AVAILABLE') {
     return res.status(409).json({ ok: false, error: 'ITEM_NOT_AVAILABLE' })
   }
-  if (!canSeeRestrictedItem(item.visibleToRoles.map(({ roleId }) => roleId), profile.roleId)) {
+  if (!canSeeRestrictedItem(item.visibleToRoles.map(({ roleId }) => roleId), profile.roleId, isTeacherApplicant(profile))) {
     return res.status(403).json({ ok: false, error: 'ITEM_NOT_VISIBLE' })
   }
 
@@ -239,9 +269,9 @@ async function createRequest(req: ApiRequest, res: ApiResponse, profile: Authent
           requestId: created.id,
           amount: item.price,
           currency: item.currency,
-          status: 'SIMULATED_PAID',
+          status: 'PENDING',
           provider: 'simulation',
-          providerReference: `SIM-${crypto.randomUUID().slice(0, 12).toUpperCase()}`,
+          providerReference: `SIM-INIT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         },
       })
     }
@@ -286,6 +316,9 @@ async function updateRequest(req: ApiRequest, res: ApiResponse, profile: Authent
   }
 
   if (parsed.data.action === 'approve') {
+    if (request.startsAt.getTime() <= Date.now()) {
+      return res.status(400).json({ ok: false, error: 'REQUEST_EXPIRED' })
+    }
     return await approveRequest(parsed.data.requestId, res, profile)
   }
   return await rejectOrCancelRequest(parsed.data.requestId, parsed.data.action, res, profile)
@@ -306,6 +339,9 @@ async function approveRequest(requestId: string, res: ApiResponse, profile: Auth
       if (!current || current.status !== 'PENDING') {
         throw new RequestWorkflowError(409, 'REQUEST_ALREADY_PROCESSED')
       }
+      if (current.startsAt.getTime() <= Date.now()) {
+        throw new RequestWorkflowError(400, 'REQUEST_EXPIRED')
+      }
 
       const conflict = await transaction.loanRequest.findFirst({
         where: {
@@ -319,6 +355,11 @@ async function approveRequest(requestId: string, res: ApiResponse, profile: Auth
       })
       if (conflict) {
         throw new RequestWorkflowError(409, 'ITEM_REQUESTED_IN_RANGE')
+      }
+
+      // In rental mode, payment must be completed in simulation before owner approval
+      if (current.item.mode === 'RENTAL' && current.payment?.status !== 'SIMULATED_PAID') {
+        throw new RequestWorkflowError(409, 'PAYMENT_REQUIRED')
       }
 
        // Claim the item conditionally so concurrent approvals cannot create two active loans.

@@ -11,7 +11,7 @@ interface ItemResponse {
 }
 
 interface DeletedItemResponse {
-  item: { id: string; photoUrl: string | null }
+  item: { id: string; photoUrl: string | null; photoUrls?: string[] }
 }
 
 export const useArticlesStore = defineStore('articles', {

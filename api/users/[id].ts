@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { prisma } from '../_lib/prisma.js'
 import { getAuthenticatedProfile, hasPermission, statusForProfileError, type ApiRequest, type ApiResponse } from '../_lib/auth.js'
+import { countEffectiveAdmins, LastAdminError, lockAdminChanges, userIsEffectiveAdmin } from '../_lib/adminGuard.js'
 
 const updateUserSchema = z.object({
   roleId: z.string().uuid().optional(),
@@ -37,23 +38,45 @@ export default async function handler(req: ApiRequest & { query?: { id?: string 
       if (!role) {
         return res.status(400).json({ ok: false, error: 'INVALID_ROLE' })
       }
+      if (role.name === 'PROFESSOR') {
+        const approvedVerification = await prisma.teacherVerification.findFirst({
+          where: { userId: id, status: 'APPROVED' },
+        })
+        if (!approvedVerification) {
+          return res.status(400).json({ ok: false, error: 'TEACHER_VERIFICATION_REQUIRED' })
+        }
+      }
     }
 
-    const updated = await prisma.user.update({
-      where: { id },
-      data: {
-        ...(parsed.data.roleId ? { roleId: parsed.data.roleId } : {}),
-        ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
-      },
-      include: { role: { select: { id: true, name: true } } },
+    const updated = await prisma.$transaction(async (tx) => {
+      await lockAdminChanges(tx)
+      const existing = await tx.user.findUnique({ where: { id } })
+      if (!existing) return null
+      const losesAccess = parsed.data.isActive === false || (parsed.data.roleId !== undefined && parsed.data.roleId !== existing.roleId)
+      if (losesAccess && (await userIsEffectiveAdmin(tx, id))) {
+        const newRoleKeepsAdmin = parsed.data.roleId && parsed.data.isActive !== false
+          ? Boolean(await tx.rolePermission.count({ where: { roleId: parsed.data.roleId, permission: { key: 'roles.manage' } } }))
+          : false
+        if (!newRoleKeepsAdmin && (await countEffectiveAdmins(tx, { excludeUserId: id })) === 0) throw new LastAdminError()
+      }
+      return tx.user.update({
+        where: { id },
+        data: {
+          ...(parsed.data.roleId ? { roleId: parsed.data.roleId } : {}),
+          ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
+        },
+        include: { role: { select: { id: true, name: true } } },
+      })
     })
+    if (!updated) return res.status(404).json({ ok: false, error: 'USER_NOT_FOUND' })
 
     return res.status(200).json({
       ok: true,
       user: { id: updated.id, role: updated.role, isActive: updated.isActive },
     })
   } catch (updateError) {
-    console.error('User update failed', updateError instanceof Error ? updateError.message : 'unknown error')
+    if (updateError instanceof LastAdminError) return res.status(409).json({ ok: false, error: 'LAST_ADMIN' })
+    console.error('User update failed')
     return res.status(500).json({ ok: false, error: 'USER_UPDATE_FAILED' })
   }
 }

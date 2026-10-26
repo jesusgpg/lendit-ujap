@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import { prisma } from '../_lib/prisma.js'
 import { getAuthenticatedProfile, hasPermission, statusForProfileError, type ApiRequest, type ApiResponse } from '../_lib/auth.js'
+import { countEffectiveAdmins, LastAdminError, lockAdminChanges } from '../_lib/adminGuard.js'
 
 const updateRoleSchema = z.object({
   description: z.string().trim().max(300).optional(),
-  permissionKeys: z.array(z.string()),
+  permissionKeys: z.array(z.string().max(80)).max(100).optional(),
 })
 
 // Roles del seed inicial: son el suelo del sistema de permisos y no se pueden borrar.
@@ -47,7 +48,7 @@ export default async function handler(req: ApiRequest & { query?: { id?: string 
     }
 
     const parsed = updateRoleSchema.safeParse(req.body ?? {})
-    if (!parsed.success) {
+    if (!parsed.success || (parsed.data.description === undefined && parsed.data.permissionKeys === undefined)) {
       return res.status(400).json({ ok: false, error: 'INVALID_ROLE_UPDATE' })
     }
 
@@ -56,20 +57,34 @@ export default async function handler(req: ApiRequest & { query?: { id?: string 
       return res.status(404).json({ ok: false, error: 'ROLE_NOT_FOUND' })
     }
 
-    const permissions = await prisma.permission.findMany({
-      where: { key: { in: parsed.data.permissionKeys } },
-      select: { id: true },
-    })
+    const requestedKeys = parsed.data.permissionKeys ? [...new Set(parsed.data.permissionKeys)] : undefined
+    const permissions = requestedKeys
+      ? await prisma.permission.findMany({ where: { key: { in: requestedKeys } }, select: { id: true, key: true } })
+      : []
+    if (requestedKeys && permissions.length !== requestedKeys.length) {
+      const known = new Set(permissions.map((p) => p.key))
+      return res.status(400).json({ ok: false, error: 'UNKNOWN_PERMISSION', unknown: requestedKeys.filter((k) => !known.has(k)) })
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
+      await lockAdminChanges(tx)
+      if (requestedKeys && !requestedKeys.includes('roles.manage')) {
+        const hadAdmin = await tx.rolePermission.count({ where: { roleId: id, permission: { key: 'roles.manage' } } })
+        if (hadAdmin > 0 && (await countEffectiveAdmins(tx, { excludeRoleId: id })) === 0) {
+          const affected = await tx.user.count({ where: { roleId: id, isActive: true } })
+          if (affected > 0) throw new LastAdminError()
+        }
+      }
       if (parsed.data.description !== undefined) {
         await tx.role.update({ where: { id }, data: { description: parsed.data.description } })
       }
-      await tx.rolePermission.deleteMany({ where: { roleId: id } })
-      if (permissions.length) {
-        await tx.rolePermission.createMany({
-          data: permissions.map((p) => ({ roleId: id, permissionId: p.id })),
-        })
+      if (requestedKeys) {
+        await tx.rolePermission.deleteMany({ where: { roleId: id } })
+        if (permissions.length) {
+          await tx.rolePermission.createMany({
+            data: permissions.map((p) => ({ roleId: id, permissionId: p.id })),
+          })
+        }
       }
       return tx.role.findUniqueOrThrow({
         where: { id },
@@ -87,7 +102,8 @@ export default async function handler(req: ApiRequest & { query?: { id?: string 
       },
     })
   } catch (error) {
-    console.error('Role update failed', error instanceof Error ? error.message : 'unknown error')
+    if (error instanceof LastAdminError) return res.status(409).json({ ok: false, error: 'LAST_ADMIN' })
+    console.error('Role update failed')
     return res.status(500).json({ ok: false, error: 'ROLE_UPDATE_FAILED' })
   }
 }

@@ -146,6 +146,10 @@ img {
   background: var(--crimson-dark);
 }
 
+.btn--primary:active {
+  transform: scale(0.98);
+}
+
 .btn--ghost {
   background: transparent;
   border-color: var(--line-strong);
@@ -157,6 +161,10 @@ img {
   color: var(--crimson);
 }
 
+.btn--ghost:active {
+  transform: scale(0.98);
+}
+
 .btn--paper {
   background: var(--on-dark);
   color: var(--crimson-dark);
@@ -164,4 +172,53 @@ img {
 
 .btn--paper:hover {
   transform: translateY(-2px);
+}
+
+.btn--paper:active {
+  transform: scale(0.98);
+}
+
+.btn:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--crimson);
+  outline-offset: 2px;
+}
+
+/* ---------- skip-link accesible para teclado ---------- */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 100;
+  padding: 10px 18px;
+  background: var(--navy);
+  color: var(--on-dark);
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  transition: top 0.2s ease-out;
+}
+
+.skip-link:focus {
+  top: 16px;
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ---------- reduced motion preference ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

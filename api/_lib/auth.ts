@@ -43,12 +43,30 @@ function getServerClient() {
   return serverClient
 }
 
-function getAuthorizationHeader(req: ApiRequest): string | null {
+export function getAuthorizationHeader(req: ApiRequest): string | null {
   const header = req.headers?.authorization
   if (Array.isArray(header)) {
     return header[0] ?? null
   }
   return header ?? null
+}
+
+export function extractBearerToken(req: ApiRequest): string | null {
+  const header = getAuthorizationHeader(req)
+  if (!header?.startsWith('Bearer ')) return null
+  return header.slice('Bearer '.length).trim()
+}
+
+export function createAuthenticatedSupabaseClient(token?: string) {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are not configured')
+  }
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+  })
 }
 
 export async function getAuthenticatedUser(req: ApiRequest): Promise<
@@ -85,6 +103,12 @@ export interface AuthenticatedProfile {
   roleId: string
   roleName: string
   permissions: string[]
+  teacherVerification?: {
+    id: string
+    status: 'DRAFT' | 'PENDING' | 'NEEDS_CORRECTION' | 'REJECTED' | 'APPROVED'
+    version: number
+    submittedVersion: number | null
+  } | null
 }
 
 export function isInstitutionalEmail(email: string) {
@@ -93,6 +117,10 @@ export function isInstitutionalEmail(email: string) {
 
 export function isAdministrativeRole(roleName: string, permissions: string[]) {
   return roleName === 'ADMIN' || permissions.includes('roles.manage')
+}
+
+export function isAdministrativeProfile(profile: AuthenticatedProfile) {
+  return isAdministrativeRole(profile.roleName, profile.permissions)
 }
 
 // Perfil de LendIt (tabla User) asociado al usuario autenticado de Supabase, con su rol
@@ -122,6 +150,14 @@ export async function getAuthenticatedProfile(req: ApiRequest): Promise<
           permissions: { select: { permission: { select: { key: true } } } },
         },
       },
+      teacherVerification: {
+        select: {
+          id: true,
+          status: true,
+          version: true,
+          submittedVersion: true,
+        },
+      },
     },
   })
 
@@ -144,9 +180,35 @@ export async function getAuthenticatedProfile(req: ApiRequest): Promise<
       roleId: profile.role.id,
       roleName: profile.role.name,
       permissions,
+      teacherVerification: profile.teacherVerification
+        ? {
+            id: profile.teacherVerification.id,
+            status: profile.teacherVerification.status,
+            version: profile.teacherVerification.version,
+            submittedVersion: profile.teacherVerification.submittedVersion,
+          }
+        : null,
     },
     error: null,
   }
+}
+
+export function isTeacherApplicant(profile: AuthenticatedProfile | null | undefined): boolean {
+  return Boolean(
+    profile?.teacherVerification &&
+    profile.teacherVerification.status !== 'APPROVED'
+  )
+}
+
+export function isApprovedProfessor(profile: AuthenticatedProfile | null | undefined): boolean {
+  return profile?.roleName === 'PROFESSOR' && profile?.teacherVerification?.status === 'APPROVED'
+}
+
+export function canPerformNewMarketplaceOperations(profile: AuthenticatedProfile | null | undefined): boolean {
+  if (!profile) return false
+  if (isAdministrativeProfile(profile)) return false
+  if (isTeacherApplicant(profile)) return false
+  return true
 }
 
 export function hasPermission(profile: AuthenticatedProfile, key: string): boolean {

@@ -1,14 +1,85 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { push } from 'notivue'
 import LoadingState from '../components/LoadingState.vue'
+import RentalCheckoutModal from '../components/RentalCheckoutModal.vue'
+import type { PaymentRecord } from '../types'
 import SiteFooter from '../components/SiteFooter.vue'
 import SiteHeader from '../components/SiteHeader.vue'
 import { useRequestsStore } from '../stores/requests'
 import type { LoanRequest } from '../types'
 
 const requestsStore = useRequestsStore()
+const router = useRouter()
 const busyKey = ref<string | null>(null)
+const selectedCheckoutRequest = ref<LoanRequest | null>(null)
+
+function openCheckout(request: LoanRequest) {
+  selectedCheckoutRequest.value = request
+}
+
+function closeCheckout() {
+  selectedCheckoutRequest.value = null
+}
+
+function onCheckoutCompleted(_payment: PaymentRecord) {
+  void requestsStore.load()
+}
+
+function paymentBadgeInfo(request: LoanRequest) {
+  if (request.item.mode !== 'RENTAL') return null
+  const status = request.payment?.status ?? 'PENDING'
+  switch (status) {
+    case 'SIMULATED_PAID':
+      return {
+        label: 'Pago simulado registrado',
+        class: 'request-payment--paid',
+        icon: '✓',
+        status: 'SIMULATED_PAID',
+      }
+    case 'FAILED':
+      return {
+        label: 'Pago simulado fallido',
+        class: 'request-payment--failed',
+        icon: '⚠',
+        status: 'FAILED',
+      }
+    case 'REFUNDED':
+      return {
+        label: 'Pago simulado devuelto',
+        class: 'request-payment--refunded',
+        icon: '↩',
+        status: 'REFUNDED',
+      }
+    case 'PENDING':
+    default:
+      return {
+        label: 'Pago simulado pendiente',
+        class: 'request-payment--pending',
+        icon: '⏳',
+        status: 'PENDING',
+      }
+  }
+}
+
+function openChat(request: LoanRequest) {
+  void router.push({ name: 'messages', query: { request: request.id } })
+}
+
+watch(
+  () => requestsStore.requests,
+  (newRequests) => {
+    if (selectedCheckoutRequest.value) {
+      const updated = newRequests.find((r) => r.id === selectedCheckoutRequest.value?.id)
+      if (updated) {
+        selectedCheckoutRequest.value = updated
+      }
+    }
+  },
+  { deep: true },
+)
+
 
 const incomingRequests = computed(() => requestsStore.requests.filter((request) => request.isOwner))
 const outgoingRequests = computed(() => requestsStore.requests.filter((request) => !request.isOwner))
@@ -20,6 +91,10 @@ const activeLoanCount = computed(
 onMounted(() => {
   void requestsStore.load()
 })
+
+function isRequestExpired(request: LoanRequest) {
+  return request.status === 'EXPIRED' || (request.status === 'PENDING' && new Date(request.startsAt).getTime() <= Date.now())
+}
 
 function statusLabel(status: LoanRequest['status']) {
   const labels: Record<LoanRequest['status'], string> = {
@@ -37,7 +112,11 @@ function formatDateRange(request: LoanRequest) {
   const time = new Intl.DateTimeFormat('es-VE', { timeStyle: 'short' })
   const starts = new Date(request.startsAt)
   const ends = new Date(request.endsAt)
-  return `${date.format(starts)} · ${time.format(starts)}–${time.format(ends)}`
+  const sameDay = starts.getFullYear() === ends.getFullYear()
+    && starts.getMonth() === ends.getMonth() && starts.getDate() === ends.getDate()
+  return sameDay
+    ? `${date.format(starts)} · ${time.format(starts)}–${time.format(ends)}`
+    : `${date.format(starts)} · ${time.format(starts)} — ${date.format(ends)} · ${time.format(ends)}`
 }
 
 function formatOffer(request: LoanRequest) {
@@ -84,12 +163,12 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
   <div class="requests-page">
     <SiteHeader show-marketplace-nav />
 
-    <main class="requests-content">
+    <main id="main-content" class="requests-content">
       <header class="requests-masthead">
         <div>
           <router-link class="back-link" to="/catalogo">← Explorar objetos</router-link>
           <p class="requests-masthead__eyebrow">Tu movimiento · LendIt UJAP</p>
-          <h1>Solicitudes sin mensajes perdidos.</h1>
+          <h1>Solicitudes y préstamos.</h1>
           <p>Aquí se encuentran lo que pides y lo que otras personas te piden a ti.</p>
         </div>
         <div class="requests-masthead__signal">
@@ -142,7 +221,7 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
           <ul v-else class="request-list">
             <li v-for="request in incomingRequests" :key="request.id" class="request-card">
               <div class="request-card__item">
-                <span class="request-card__icon">{{ request.item.categoryIcon || '·' }}</span>
+                <span class="request-card__icon" aria-hidden="true">{{ request.item.category.charAt(0) }}</span>
                 <div>
                   <span class="request-card__code">{{ request.item.code }}</span>
                   <h3>{{ request.item.title }}</h3>
@@ -152,24 +231,48 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
               <div class="request-card__details">
                 <span>Solicita <strong>{{ request.requester.name || request.requester.email }}</strong></span>
                 <span>{{ formatDateRange(request) }}</span>
+                <span v-if="request.item.mode === 'RENTAL' && paymentBadgeInfo(request)" class="request-payment" :class="paymentBadgeInfo(request)?.class">
+                  <span aria-hidden="true">{{ paymentBadgeInfo(request)?.icon }}</span>
+                  {{ paymentBadgeInfo(request)?.label }}
+                </span>
+                <span v-if="request.item.mode === 'RENTAL' && request.payment?.status !== 'SIMULATED_PAID' && request.status === 'PENDING' && !isRequestExpired(request)" class="request-payment-hint">
+                  El solicitante debe completar el pago simulado antes de que puedas aceptar.
+                </span>
+                <span v-if="isRequestExpired(request)" class="request-payment-hint request-payment-hint--expired">
+                  Esta solicitud ha vencido porque la fecha de inicio ya pasó.
+                </span>
                 <span v-if="request.message">“{{ request.message }}”</span>
               </div>
               <div class="request-card__footer">
-                <span class="request-status" :class="`request-status--${request.status.toLowerCase()}`">
-                  <span aria-hidden="true"></span>{{ statusLabel(request.status) }}
+                <span class="request-status" :class="`request-status--${isRequestExpired(request) ? 'expired' : request.status.toLowerCase()}`">
+                  <span aria-hidden="true"></span>{{ isRequestExpired(request) ? 'Vencida' : statusLabel(request.status) }}
                 </span>
                 <div class="request-card__actions">
                   <button
-                    v-if="request.status === 'PENDING'"
-                    class="request-card__action request-card__action--primary"
+                    class="request-card__action"
                     type="button"
-                    :disabled="busyKey === `approve:${request.id}:`"
-                    @click="performAction(request, 'approve')"
+                    @click="openChat(request)"
                   >
-                    {{ busyKey === `approve:${request.id}:` ? 'Guardando…' : 'Aceptar' }}
+                    Conversar
                   </button>
                   <button
-                    v-if="request.status === 'PENDING'"
+                    v-if="request.status === 'PENDING' && !isRequestExpired(request)"
+                    class="request-card__action request-card__action--primary"
+                    type="button"
+                    :disabled="busyKey === `approve:${request.id}:` || (request.item.mode === 'RENTAL' && request.payment?.status !== 'SIMULATED_PAID')"
+                    :title="request.item.mode === 'RENTAL' && request.payment?.status !== 'SIMULATED_PAID' ? 'Esperando pago simulado del solicitante' : undefined"
+                    @click="performAction(request, 'approve')"
+                  >
+                    {{
+                      busyKey === `approve:${request.id}:`
+                        ? 'Guardando…'
+                        : request.item.mode === 'RENTAL' && request.payment?.status !== 'SIMULATED_PAID'
+                          ? 'Esperando pago'
+                          : 'Aceptar'
+                    }}
+                  </button>
+                  <button
+                    v-if="request.status === 'PENDING' && !isRequestExpired(request)"
                     class="request-card__action"
                     type="button"
                     :disabled="busyKey === `reject:${request.id}:`"
@@ -211,7 +314,7 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
           <ul v-else class="request-list">
             <li v-for="request in outgoingRequests" :key="request.id" class="request-card">
               <div class="request-card__item">
-                <span class="request-card__icon">{{ request.item.categoryIcon || '·' }}</span>
+                <span class="request-card__icon" aria-hidden="true">{{ request.item.category.charAt(0) }}</span>
                 <div>
                   <span class="request-card__code">{{ request.item.code }}</span>
                   <h3>{{ request.item.title }}</h3>
@@ -221,16 +324,48 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
               <div class="request-card__details">
                 <span>Propietario <strong>{{ request.item.owner.name || request.item.owner.email }}</strong></span>
                 <span>{{ formatDateRange(request) }}</span>
-                <span v-if="request.payment">Pago {{ request.payment.status === 'SIMULATED_PAID' ? 'simulado registrado' : request.payment.status.toLowerCase() }}</span>
+                <span v-if="request.item.mode === 'RENTAL' && paymentBadgeInfo(request)" class="request-payment" :class="paymentBadgeInfo(request)?.class">
+                  <span aria-hidden="true">{{ paymentBadgeInfo(request)?.icon }}</span>
+                  {{ paymentBadgeInfo(request)?.label }}
+                </span>
+                <span v-if="request.item.mode === 'RENTAL' && request.payment?.providerReference" class="request-payment-ref">
+                  Ref: {{ request.payment.providerReference }}
+                </span>
+                <span v-if="isRequestExpired(request)" class="request-payment-hint request-payment-hint--expired">
+                  Esta solicitud ha vencido porque la fecha de inicio ya pasó.
+                </span>
                 <span v-if="request.message">“{{ request.message }}”</span>
               </div>
               <div class="request-card__footer">
-                <span class="request-status" :class="`request-status--${request.status.toLowerCase()}`">
-                  <span aria-hidden="true"></span>{{ statusLabel(request.status) }}
+                <span class="request-status" :class="`request-status--${isRequestExpired(request) ? 'expired' : request.status.toLowerCase()}`">
+                  <span aria-hidden="true"></span>{{ isRequestExpired(request) ? 'Vencida' : statusLabel(request.status) }}
                 </span>
                 <div class="request-card__actions">
                   <button
-                    v-if="request.status === 'PENDING'"
+                    v-if="request.status === 'PENDING' && !isRequestExpired(request) && request.item.mode === 'RENTAL' && (!request.payment || request.payment.status === 'PENDING')"
+                    class="request-card__action request-card__action--pay"
+                    type="button"
+                    @click="openCheckout(request)"
+                  >
+                    💳 Pagar alquiler (Simulado)
+                  </button>
+                  <button
+                    v-if="request.status === 'PENDING' && !isRequestExpired(request) && request.item.mode === 'RENTAL' && request.payment?.status === 'FAILED'"
+                    class="request-card__action request-card__action--pay-retry"
+                    type="button"
+                    @click="openCheckout(request)"
+                  >
+                    ⚠ Reintentar pago
+                  </button>
+                  <button
+                    class="request-card__action"
+                    type="button"
+                    @click="openChat(request)"
+                  >
+                    Conversar
+                  </button>
+                  <button
+                    v-if="request.status === 'PENDING' && !isRequestExpired(request)"
                     class="request-card__action"
                     type="button"
                     :disabled="busyKey === `cancel:${request.id}:`"
@@ -254,6 +389,13 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
         </section>
       </div>
     </main>
+
+    <RentalCheckoutModal
+      v-if="selectedCheckoutRequest"
+      :request="selectedCheckoutRequest"
+      @close="closeCheckout"
+      @completed="onCheckoutCompleted"
+    />
 
     <SiteFooter />
   </div>
@@ -526,12 +668,14 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
 }
 
 .request-status--rejected,
-.request-status--cancelled {
+.request-status--cancelled,
+.request-status--expired {
   color: var(--crimson-dark);
 }
 
 .request-status--rejected > span,
-.request-status--cancelled > span {
+.request-status--cancelled > span,
+.request-status--expired > span {
   background: var(--crimson);
 }
 
@@ -639,5 +783,78 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
   .requests-masthead h1 {
     font-size: 48px;
   }
+}
+
+
+/* Payment status badges & checkout buttons */
+.request-payment {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.request-payment--paid {
+  background: rgba(27, 115, 64, 0.12);
+  color: #1b7340;
+  border: 1px solid rgba(27, 115, 64, 0.3);
+}
+
+.request-payment--pending {
+  background: var(--gold-bg);
+  color: var(--gold);
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.request-payment--failed {
+  background: var(--crimson-bg);
+  color: var(--crimson);
+  border: 1px solid color-mix(in srgb, var(--crimson) 45%, transparent);
+}
+
+.request-payment--refunded {
+  background: var(--navy-bg);
+  color: var(--navy);
+  border: 1px solid color-mix(in srgb, var(--navy) 40%, transparent);
+}
+
+.request-payment-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.request-payment-hint {
+  font-size: 11px;
+  color: var(--gold);
+  font-style: italic;
+}
+
+.request-payment-hint--expired {
+  color: var(--crimson-dark);
+  font-weight: 600;
+  font-style: normal;
+}
+
+.request-card__action--pay {
+  background: var(--crimson) !important;
+  color: #fbf3e6 !important;
+  border-color: var(--crimson) !important;
+  box-shadow: 0 2px 6px rgba(200, 16, 46, 0.25);
+}
+
+.request-card__action--pay:hover {
+  background: var(--crimson-dark) !important;
+  border-color: var(--crimson-dark) !important;
+}
+
+.request-card__action--pay-retry {
+  background: var(--gold-bg) !important;
+  color: var(--ink) !important;
+  border-color: var(--gold) !important;
 }
 </style>

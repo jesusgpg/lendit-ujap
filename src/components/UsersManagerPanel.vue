@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { push } from 'notivue'
 import { apiRequest } from '../lib/api'
 import { useCatalogStore } from '../stores/catalog'
 import { roleLabel } from '../lib/roleLabels'
 import LoadingState from './LoadingState.vue'
+import ModalDialog from './ModalDialog.vue'
 
 interface AdminUser {
   id: string
@@ -18,23 +19,56 @@ interface AdminUser {
 const catalog = useCatalogStore()
 const users = ref<AdminUser[]>([])
 const isLoading = ref(false)
+const loadError = ref('')
+const query = ref('')
+const page = ref(1)
+const total = ref(0)
+const pageSize = ref(25)
 const savingUserId = ref<string | null>(null)
 const savedUserId = ref<string | null>(null)
 const resettingUserId = ref<string | null>(null)
 const resetMessageByUser = ref<Record<string, string>>({})
+const rowErrorByUser = ref<Record<string, string>>({})
+const pendingDisable = ref<AdminUser | null>(null)
+let loadVersion = 0
+let searchTimer: ReturnType<typeof setTimeout> | undefined
 
-onMounted(async () => {
+const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+
+async function loadUsers() {
+  const version = ++loadVersion
   isLoading.value = true
+  loadError.value = ''
   try {
+    const params = new URLSearchParams({ page: String(page.value) })
+    if (query.value.trim()) params.set('q', query.value.trim())
     const [usersResponse] = await Promise.all([
-      apiRequest<{ users: AdminUser[] }>('/api/users'),
+      apiRequest<{ users: AdminUser[]; total: number; pageSize: number }>(`/api/users?${params}`),
       catalog.roles.length ? Promise.resolve() : catalog.loadRoles(),
     ])
+    if (version !== loadVersion) return
     users.value = usersResponse.users
+    total.value = usersResponse.total
+    pageSize.value = usersResponse.pageSize
+  } catch (error) {
+    if (version === loadVersion) loadError.value = error instanceof Error ? error.message : 'No se pudieron cargar los usuarios.'
   } finally {
-    isLoading.value = false
+    if (version === loadVersion) isLoading.value = false
   }
-})
+}
+
+function onSearchInput() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => { page.value = 1; void loadUsers() }, 300)
+}
+
+function goToPage(next: number) {
+  page.value = Math.min(pageCount.value, Math.max(1, next))
+  void loadUsers()
+}
+
+onMounted(loadUsers)
+onBeforeUnmount(() => clearTimeout(searchTimer))
 
 function flashSaved(userId: string) {
   savedUserId.value = userId
@@ -43,11 +77,12 @@ function flashSaved(userId: string) {
   }, 2000)
 }
 
-async function changeRole(user: AdminUser, roleId: string) {
-  if (roleId === user.role.id) return
+async function changeRole(user: AdminUser, roleId: string, selectEl?: HTMLSelectElement) {
+  if (roleId === user.role.id || savingUserId.value) return
 
   savingUserId.value = user.id
   savedUserId.value = null
+  rowErrorByUser.value = { ...rowErrorByUser.value, [user.id]: '' }
   try {
     await apiRequest(`/api/users/${user.id}`, {
       method: 'PATCH',
@@ -63,23 +98,32 @@ async function changeRole(user: AdminUser, roleId: string) {
       message: `${user.name} ahora es ${roleLabel(user.role.name)}.`,
     })
   } catch (error) {
-    push.error({
-      title: 'No se pudo cambiar el rol',
-      message: error instanceof Error ? error.message : 'No se pudo actualizar el rol.',
-    })
+    const message = error instanceof Error ? error.message : 'No se pudo actualizar el rol.'
+    // El servidor rechazó el cambio: se restaura el valor mostrado.
+    if (selectEl) selectEl.value = user.role.id
+    rowErrorByUser.value = { ...rowErrorByUser.value, [user.id]: message }
+    push.error({ title: 'No se pudo cambiar el rol', message })
   } finally {
     savingUserId.value = null
   }
 }
 
+function requestToggle(user: AdminUser) {
+  if (user.isActive) pendingDisable.value = user
+  else void toggleActive(user)
+}
+
 async function toggleActive(user: AdminUser) {
+  if (savingUserId.value) return
   savingUserId.value = user.id
+  rowErrorByUser.value = { ...rowErrorByUser.value, [user.id]: '' }
   try {
     await apiRequest(`/api/users/${user.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ isActive: !user.isActive }),
     })
     user.isActive = !user.isActive
+    pendingDisable.value = null
     flashSaved(user.id)
     push.success(
       user.isActive
@@ -87,10 +131,10 @@ async function toggleActive(user: AdminUser) {
         : { title: 'Cuenta deshabilitada', message: `${user.name} ya no puede iniciar sesión.` },
     )
   } catch (error) {
-    push.error({
-      title: 'No se pudo actualizar la cuenta',
-      message: error instanceof Error ? error.message : 'No se pudo cambiar el estado.',
-    })
+    const message = error instanceof Error ? error.message : 'No se pudo cambiar el estado.'
+    rowErrorByUser.value = { ...rowErrorByUser.value, [user.id]: message }
+    pendingDisable.value = null
+    push.error({ title: 'No se pudo actualizar la cuenta', message })
   } finally {
     savingUserId.value = null
   }
@@ -121,8 +165,17 @@ async function sendPasswordReset(user: AdminUser) {
 
 <template>
   <div class="users">
+    <label class="users__search">
+      <span>Buscar usuario</span>
+      <input v-model="query" type="search" maxlength="100" placeholder="Nombre o correo" @input="onSearchInput" />
+    </label>
+
     <LoadingState v-if="isLoading" label="Cargando usuarios…" />
-    <p v-else-if="users.length === 0" class="users__hint">No hay usuarios registrados todavía.</p>
+    <div v-else-if="loadError" class="users__hint" role="alert">
+      <p>{{ loadError }}</p>
+      <button class="btn btn--small" type="button" @click="loadUsers">Reintentar</button>
+    </div>
+    <p v-else-if="users.length === 0" class="users__hint">{{ query ? 'Ningún usuario coincide con la búsqueda.' : 'No hay usuarios registrados todavía.' }}</p>
 
     <ul v-else class="users__list">
       <li v-for="user in users" :key="user.id" class="user-row" :class="{ 'user-row--disabled': !user.isActive }">
@@ -140,7 +193,7 @@ async function sendPasswordReset(user: AdminUser) {
             class="user-row__role-select"
             :value="user.role.id"
             :disabled="savingUserId === user.id"
-            @change="changeRole(user, ($event.target as HTMLSelectElement).value)"
+            @change="changeRole(user, ($event.target as HTMLSelectElement).value, $event.target as HTMLSelectElement)"
           >
             <option v-for="role in catalog.roles" :key="role.id" :value="role.id">{{ roleLabel(role.name) }}</option>
           </select>
@@ -159,21 +212,45 @@ async function sendPasswordReset(user: AdminUser) {
             :class="user.isActive ? 'user-row__disable-btn' : 'btn--primary'"
             type="button"
             :disabled="savingUserId === user.id"
-            @click="toggleActive(user)"
+            @click="requestToggle(user)"
           >
             {{ user.isActive ? 'Deshabilitar' : 'Habilitar' }}
           </button>
         </div>
 
+        <p v-if="rowErrorByUser[user.id]" class="user-row__status user-row__status--error" role="alert">{{ rowErrorByUser[user.id] }}</p>
         <p v-if="savedUserId === user.id" class="user-row__status user-row__status--ok">✓ Guardado</p>
         <p v-if="resetMessageByUser[user.id]" class="user-row__status">{{ resetMessageByUser[user.id] }}</p>
         <span v-if="!user.isActive" class="user-row__badge">Deshabilitado</span>
       </li>
     </ul>
+
+    <nav v-if="!isLoading && !loadError && total > pageSize" class="users__pager" aria-label="Paginación de usuarios">
+      <button class="btn btn--small" type="button" :disabled="page <= 1" @click="goToPage(page - 1)">Anterior</button>
+      <span>Página {{ page }} de {{ pageCount }} · {{ total }} usuarios</span>
+      <button class="btn btn--small" type="button" :disabled="page >= pageCount" @click="goToPage(page + 1)">Siguiente</button>
+    </nav>
+
+    <ModalDialog v-if="pendingDisable" :title="`Deshabilitar a ${pendingDisable.name}`" @close="savingUserId || (pendingDisable = null)">
+      <div class="users__confirm">
+        <p>{{ pendingDisable.name }} ya no podrá iniciar sesión. Su historial de préstamos, conversaciones y pagos simulados se conserva y puedes habilitarla de nuevo.</p>
+        <div class="users__confirm-actions">
+          <button class="btn btn--small" type="button" :disabled="!!savingUserId" @click="pendingDisable = null">Cancelar</button>
+          <button class="btn btn--small btn--primary" type="button" :disabled="!!savingUserId" @click="toggleActive(pendingDisable)">{{ savingUserId ? 'Deshabilitando…' : 'Deshabilitar' }}</button>
+        </div>
+      </div>
+    </ModalDialog>
   </div>
 </template>
 
 <style scoped>
+.users__search { display: flex; flex-direction: column; gap: 6px; max-width: 360px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.users__search input { font: inherit; padding: 11px 14px; border-radius: 10px; border: 1.5px solid var(--line-strong); background: var(--paper); color: var(--ink); }
+.users__search input:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
+.users__pager { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--ink-soft); }
+.users__confirm { display: flex; flex-direction: column; gap: 16px; }
+.users__confirm-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.user-row__status--error { color: var(--crimson-dark); flex-basis: 100%; margin: 0; }
 .users {
   display: flex;
   flex-direction: column;

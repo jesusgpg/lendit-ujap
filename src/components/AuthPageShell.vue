@@ -18,6 +18,7 @@ withDefaults(
 )
 
 const router = useRouter()
+const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
 
 function goToLogin() {
   void router.push({ name: 'login' })
@@ -28,7 +29,7 @@ function goToLogin() {
   <div class="auth-page" :class="{ 'auth-page--wide-card': wideCard }">
     <SiteHeader show-marketplace-nav @open-login="goToLogin" />
 
-    <main class="auth-page__layout">
+    <main id="main-content" class="auth-page__layout">
       <section class="auth-page__intro" aria-labelledby="auth-page-title">
         <p class="auth-page__eyebrow">{{ eyebrow }}</p>
         <h1 id="auth-page-title">{{ title }}</h1>
@@ -42,7 +43,7 @@ function goToLogin() {
       </section>
 
       <section class="auth-page__card" :class="{ 'auth-page__card--wide': wideCard }" :aria-label="cardLabel">
-        <div class="auth-page__card-mark" aria-hidden="true">L</div>
+        <div class="auth-page__card-mark" aria-hidden="true"><img :src="crestSrc" alt="" /></div>
         <p class="auth-page__card-kicker">{{ cardKicker }}</p>
         <h2>{{ cardTitle }}</h2>
         <slot />

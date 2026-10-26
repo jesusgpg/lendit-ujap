@@ -1,218 +1,32 @@
 <script setup lang="ts">
 import type { Article } from '../types'
-
-withDefaults(
-  defineProps<{
-    article: Article
-    isOwn?: boolean
-  }>(),
-  { isOwn: false },
-)
-
-defineEmits<{
-  (e: 'request', articleId: string): void
-}>()
-
-function formatOffer(article: { mode: string; price: number | null; currency: string | null }) {
-  if (article.mode !== 'RENTAL' || article.price === null || !article.currency) {
-    return 'Préstamo gratuito'
-  }
-
-  return new Intl.NumberFormat('es-VE', {
-    style: 'currency',
-    currency: article.currency,
-    maximumFractionDigits: 2,
-  }).format(article.price)
+import ItemPhotoGallery from './ItemPhotoGallery.vue'
+withDefaults(defineProps<{ article: Article; isOwn?: boolean; readOnly?: boolean }>(), { isOwn: false, readOnly: false })
+defineEmits<{ (e: 'request', articleId: string): void; (e: 'question', articleId: string): void }>()
+function formatOffer(article: Article) {
+  if (article.mode !== 'RENTAL' || article.price === null || !article.currency) return 'Préstamo gratuito'
+  return new Intl.NumberFormat('es-VE', { style: 'currency', currency: article.currency, maximumFractionDigits: 2 }).format(article.price)
 }
 </script>
-
 <template>
   <article class="loan-card">
     <div class="loan-card__visual">
-      <img v-if="article.photoUrl" :src="article.photoUrl" :alt="`Foto de ${article.title}`" />
-      <span v-else aria-hidden="true">{{ article.categoryIcon || '·' }}</span>
+      <ItemPhotoGallery class="loan-card__gallery" :photo-urls="article.photoUrls" :photo-url="article.photoUrl" :title="article.title" :category-icon="article.category.slice(0, 1)" />
+      <span class="loan-card__status" :class="{ 'loan-card__status--lent': article.status !== 'available' }">{{ article.status === 'available' ? 'Disponible' : 'En préstamo' }}</span>
     </div>
-    <header>
-      <span 
-        class="loan-card__tag" 
-        :class="{ 'loan-card__tag--gold': article.status === 'available' }"
-      >
-        {{ article.status === 'available' ? 'DISPONIBLE' : 'EN PRÉSTAMO' }}
-      </span>
-      <span class="loan-card__code">{{ article.code }}</span>
-    </header>
-    <h3>{{ article.title }}</h3>
-    <p class="loan-card__meta">{{ article.category }} · {{ article.duration }}</p>
-    <p class="loan-card__offer">{{ formatOffer(article) }}</p>
-    
-    <footer class="loan-card__footer">
-      <div v-if="article.status === 'lent' && article.returnTime" class="loan-card__return">
-        <span>Devuelve</span>
-        <strong>{{ article.returnTime }}</strong>
-      </div>
-      <div v-else class="loan-card__return">
-        <span>Listo para retirar</span>
-      </div>
-      <span v-if="isOwn" class="loan-card__own">Es tuyo</span>
-      <button
-        v-else
-        class="btn-action"
-        :class="{ 'btn-action--available': article.status === 'available' }"
-        @click="$emit('request', article.id)"
-      >
-        {{ article.status === 'available' ? 'Pedir' : 'Preguntar' }}
-      </button>
-    </footer>
+    <div class="loan-card__body">
+      <p class="loan-card__category">{{ article.category }}</p>
+      <h3>{{ article.title }}</h3>
+      <p class="loan-card__meta">{{ article.duration }}</p>
+      <div class="loan-card__footer"><div><strong>{{ formatOffer(article) }}</strong><span>{{ article.status === 'lent' && article.returnTime ? `Devolución: ${article.returnTime}` : 'Entrega por coordinar' }}</span></div><span v-if="readOnly || isOwn" class="loan-card__own">{{ readOnly ? 'Solo lectura' : 'Tu publicación' }}</span><button v-else type="button" @click="$emit('request', article.id)">{{ article.status === 'available' ? 'Solicitar' : 'Consultar' }} <span aria-hidden="true">↗</span></button></div>
+      <button v-if="!isOwn && !readOnly" type="button" class="loan-card__question" @click="$emit('question', article.id)">Preguntar al propietario</button>
+    </div>
   </article>
 </template>
+<style scoped>
+.loan-card{min-width:0;width:100%;background:var(--paper);border-radius:14px;overflow:hidden}.loan-card__visual{position:relative;overflow:hidden;border-radius:14px;background:var(--surface-soft)}.loan-card__gallery{height:220px;border-radius:14px;background:var(--surface-soft)}.loan-card__gallery :deep(.item-gallery__fallback-icon){font:500 64px var(--display);color:var(--navy);opacity:.65}.loan-card__gallery :deep(.item-gallery__image){transition:transform 300ms var(--ease-out)}.loan-card__status{position:absolute;bottom:13px;left:13px;z-index:4;padding:5px 10px;border-radius:999px;background:var(--paper);color:var(--ink);font:600 12px var(--sans);pointer-events:none}.loan-card__status::before{display:inline-block;width:6px;height:6px;margin-right:6px;border-radius:50%;background:#397448;content:''}.loan-card__status--lent::before{background:var(--gold)}.loan-card__body{padding:17px 1px 0}.loan-card__category{font-size:13px;color:var(--ink-soft);margin:0 0 5px}.loan-card h3{font:650 21px/1.3 var(--sans);letter-spacing:-.025em;overflow-wrap:anywhere}.loan-card__meta{margin-top:5px;font-size:14px;color:var(--ink-soft)}.loan-card__footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:17px}.loan-card__footer>div{min-width:0}.loan-card__footer strong,.loan-card__footer>div>span{display:block}.loan-card__footer strong{font-size:15px;color:var(--navy)}.loan-card__footer>div>span{margin-top:4px;font-size:12px;color:var(--ink-soft)}.loan-card__footer button{flex:0 0 auto;padding:10px 15px;border:0;border-radius:999px;background:var(--crimson);color:white;font:650 13px var(--sans);cursor:pointer;transition:background 160ms ease,transform 160ms var(--ease-out)}.loan-card__footer button:hover{background:var(--crimson-dark)}.loan-card__footer button:active{transform:scale(.97)}.loan-card__own{font-size:13px;color:var(--ink-soft)}@media(hover:hover) and (pointer:fine){.loan-card:hover :deep(.item-gallery__image){transform:scale(1.035)}}@media(max-width:1000px) and (min-width:701px){.loan-card__footer{align-items:flex-start;flex-direction:column}.loan-card__gallery{height:190px}}@media(prefers-reduced-motion:reduce){.loan-card__gallery :deep(.item-gallery__image),.loan-card__footer button{transition:none}}
+</style>
 
 <style scoped>
-.loan-card {
-  width: 268px;
-  max-width: 100%;
-  padding: 22px 22px 20px;
-  border-radius: 16px;
-  background: var(--paper-2);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.loan-card:hover {
-  transform: translateY(-2px) rotate(0deg) !important;
-  box-shadow: var(--shadow-soft);
-}
-
-.loan-card header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.loan-card__visual {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 82px;
-  margin-bottom: 14px;
-  overflow: hidden;
-  border-radius: 11px;
-  background: linear-gradient(135deg, var(--navy-bg), var(--gold-bg));
-}
-
-.loan-card__visual img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.loan-card__visual span {
-  font-size: 31px;
-}
-
-.loan-card__tag {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--crimson-dark);
-  background: var(--crimson-bg);
-  padding: 4px 8px;
-  border-radius: 5px;
-}
-
-.loan-card__tag--gold {
-  color: var(--gold);
-  background: var(--gold-bg);
-}
-
-.loan-card__code {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--ink-faint);
-}
-
-.loan-card h3 {
-  font-size: 19px;
-  font-weight: 560;
-  margin: 0;
-  color: var(--ink);
-}
-
-.loan-card__meta {
-  margin: 4px 0 16px 0;
-  font-size: 13px;
-  color: var(--ink-faint);
-}
-
-.loan-card__offer {
-  margin-top: -9px;
-  color: var(--crimson-dark);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-}
-
-.loan-card__footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: auto;
-  padding-top: 14px;
-  border-top: 1px dashed var(--line-strong);
-  font-size: 12.5px;
-  color: var(--ink-faint);
-}
-
-.loan-card__return {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-}
-
-.loan-card__return strong {
-  font-family: var(--mono);
-  color: var(--ink);
-}
-
-.btn-action {
-  background: color-mix(in srgb, var(--crimson) 8%, var(--paper-2));
-  color: var(--crimson-dark);
-  border: 1px solid color-mix(in srgb, var(--crimson) 25%, transparent);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-action:hover {
-  background: var(--crimson);
-  color: white;
-  border-color: var(--crimson);
-}
-
-.btn-action--available {
-  background: color-mix(in srgb, var(--gold) 10%, var(--paper-2));
-  color: var(--gold);
-  border-color: color-mix(in srgb, var(--gold) 30%, transparent);
-}
-
-.btn-action--available:hover {
-  background: var(--gold);
-  color: var(--navy);
-  border-color: var(--gold);
-}
-
-.loan-card__own {
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-faint);
-}
+.loan-card__question{padding:10px 0;margin-top:8px;min-height:44px;background:none;border:0;color:var(--crimson-dark);font:500 14px var(--sans);text-decoration:underline;text-underline-offset:4px;cursor:pointer}
 </style>

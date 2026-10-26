@@ -38,7 +38,15 @@ export const useCatalogStore = defineStore('catalog', {
 
     async loadCategories() {
       const response = await apiRequest<CategoriesResponse>('/api/categories')
-      this.categories = response.categories
+      this.categories = response.categories.map((category) => ({
+        ...category,
+        imagenUrl: category.imagenUrl ?? null,
+        imagenAlt: category.imagenAlt ?? null,
+        unsplashPhotoId: category.unsplashPhotoId ?? null,
+        photographerName: category.photographerName ?? null,
+        photographerUrl: category.photographerUrl ?? null,
+        unsplashUrl: category.unsplashUrl ?? null,
+      }))
     },
 
     async loadCareers() {

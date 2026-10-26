@@ -81,6 +81,7 @@ src/
     - Fotos de perfil optimizadas en el navegador y fotos de objetos almacenadas en el bucket `item-photos` de Supabase Storage.
    - Panel administrativo dividido por rutas: `/admin/roles`, `/admin/users`, `/admin/categories` y `/admin/careers`.
    - Pasos informativos marcables como "Leído" con persistencia reactiva.
+   - Chat por solicitud mediante `GET/POST /api/messages` con persistencia en `ChatMessage`, validación de participante (solicitante o dueño del item), control de estado y Realtime vía Supabase (ver `docs/chat.md`).
 
 ---
 

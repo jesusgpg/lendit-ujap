@@ -20,10 +20,10 @@ function handleLoginSuccess() {
     return
   }
   if (route.query.redirect === 'publish') {
-    void router.replace({ name: 'landing', query: { publish: '1' } })
+    void router.replace({ name: 'publish' })
     return
   }
-  void router.replace({ name: 'landing' })
+  void router.replace({ name: 'student-home' })
 }
 
 function openRegister() {
@@ -34,8 +34,8 @@ function openRegister() {
 <template>
   <AuthPageShell
     eyebrow="Acceso UJAP / LendIt"
-    title="Tu red de préstamos empieza aquí."
-    description="Entra con tu correo institucional para publicar objetos, pedir lo que necesitas y cuidar tu carnet digital."
+    title="Vuelve a tu comunidad."
+    description="Entra con tu correo institucional para publicar objetos, enviar solicitudes y conversar con otros miembros de la UJAP."
     note="Estudiantes y profesores ingresan con su cuenta institucional @ujap.edu.ve."
     card-kicker="Comunidad UJAP"
     card-title="Iniciar sesión"

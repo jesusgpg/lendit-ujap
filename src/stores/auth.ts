@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { apiRequest } from '../lib/api'
 import { getSupabaseClient } from '../lib/supabase'
 import { uploadItemPhoto } from '../lib/storage'
+import { useMessagesStore } from './messages'
 import type { AuthUser, LoginCredentials, RegisterInput } from '../types'
 
 interface AuthResult {
@@ -63,8 +64,14 @@ function validateCommonFields(input: RegisterInput) {
   const lastName = input.lastName.trim()
   const phone = input.phone.trim()
 
-  if (!firstName || !lastName || !input.careerId || !phone) {
+  if (!firstName || !lastName || !phone) {
     return 'Completa todos los campos del registro.'
+  }
+  if (input.role === 'STUDENT' && !input.careerId) {
+    return 'Selecciona tu carrera.'
+  }
+  if (input.role === 'PROFESSOR' && !input.schoolId) {
+    return 'Selecciona tu facultad o escuela.'
   }
   if (!isInstitutionalEmail(email)) {
     return 'Usa tu correo institucional (@ujap.edu.ve).'
@@ -88,7 +95,16 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => state.user !== null,
+    isAdmin: (state) => state.user?.role === 'ADMIN' || (state.user?.permissions.includes('roles.manage') ?? false),
     hasPermission: (state) => (key: string) => state.user?.permissions.includes(key) ?? false,
+    isTeacherApplicant: (state) => Boolean(state.user?.teacherVerification && state.user.teacherVerification.status !== 'APPROVED'),
+    isApprovedTeacher: (state) => state.user?.role === 'PROFESSOR' && state.user?.teacherVerification?.status === 'APPROVED',
+    canPerformMarketplaceOperations: (state) => {
+      if (!state.user) return false
+      if (state.user.role === 'ADMIN' || state.user.permissions.includes('roles.manage')) return false
+      if (state.user.teacherVerification && state.user.teacherVerification.status !== 'APPROVED') return false
+      return true
+    },
   },
 
   actions: {
@@ -115,6 +131,7 @@ export const useAuthStore = defineStore('auth', {
           supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') {
               this.user = null
+              useMessagesStore().clear()
               return
             }
 
@@ -148,6 +165,7 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         const response = await apiRequest<ProfileResponse>('/api/me')
+        if (this.user?.id !== response.user.id) useMessagesStore().clear()
         this.user = response.user
       } catch (error) {
         // Cuentas creadas antes de que el trigger de base de datos estuviera activo
@@ -181,7 +199,9 @@ export const useAuthStore = defineStore('auth', {
             data: {
               firstName: input.firstName.trim(),
               lastName: input.lastName.trim(),
-              careerId: input.careerId,
+              careerId: input.careerId || null,
+              schoolId: input.schoolId || null,
+              department: input.department?.trim() || null,
               role: input.role,
               phone: input.phone.trim(),
             },
@@ -266,6 +286,7 @@ export const useAuthStore = defineStore('auth', {
       // Se limpia de inmediato para que la UI refleje la salida sin esperar
       // la respuesta remota, que puede tardar o fallar por red.
       this.user = null
+      useMessagesStore().clear()
       await getSupabaseClient().auth.signOut()
     },
   },

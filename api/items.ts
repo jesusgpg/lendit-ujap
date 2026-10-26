@@ -3,6 +3,8 @@ import type { Prisma } from '../generated/prisma/client.js'
 import { prisma } from './_lib/prisma.js'
 import {
   getAuthenticatedProfile,
+  isAdministrativeProfile,
+  isTeacherApplicant,
   hasPermission,
   statusForProfileError,
   type ApiRequest,
@@ -25,6 +27,7 @@ const createItemSchema = z.object({
   duration: z.string().trim().min(1).max(80),
   description: z.string().trim().max(1000).optional(),
   photoUrl: z.string().url().max(2048).optional(),
+  photoUrls: z.array(z.string().url().max(2048)).max(8).optional(),
   mode: itemModeSchema.default('LOAN'),
   price: optionalPriceSchema,
   currency: currencySchema.optional(),
@@ -40,6 +43,7 @@ const updateItemSchema = z
     duration: z.string().trim().min(1).max(80).optional(),
     description: z.union([z.string().trim().max(1000), z.null()]).optional(),
     photoUrl: z.string().url().max(2048).nullable().optional(),
+    photoUrls: z.array(z.string().url().max(2048)).max(8).nullable().optional(),
     mode: itemModeSchema.optional(),
     price: optionalPriceSchema,
     currency: currencySchema.optional(),
@@ -60,6 +64,7 @@ type ItemForSerialization = {
   title: string
   description: string | null
   photoUrl: string | null
+  photoUrls?: string[]
   duration: string | null
   mode: string
   price: { toString: () => string } | null
@@ -78,13 +83,19 @@ function serializeItem(item: ItemForSerialization) {
     REJECTED: 'rejected',
   }
 
+  const photoUrls = item.photoUrls && item.photoUrls.length > 0
+    ? item.photoUrls
+    : (item.photoUrl ? [item.photoUrl] : [])
+  const coverUrl = item.photoUrl ?? (photoUrls[0] ?? null)
+
   return {
     id: item.id,
     ownerId: item.ownerId,
     code: item.code,
     title: item.title,
     description: item.description,
-    photoUrl: item.photoUrl,
+    photoUrl: coverUrl,
+    photoUrls,
     category: item.category.label,
     categoryKey: item.category.key,
     categoryIcon: item.category.icon,
@@ -167,6 +178,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         if (!profile) {
           return res.status(statusForProfileError(error)).json({ ok: false, error })
         }
+        if (isAdministrativeProfile(profile)) return res.status(403).json({ ok: false, error: 'ADMIN_MARKETPLACE_FORBIDDEN' })
         return listRequests(profile, res)
       }
 
@@ -175,9 +187,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (mine && !profile) {
         return res.status(statusForProfileError(error)).json({ ok: false, error })
       }
+      if (mine && profile && isAdministrativeProfile(profile)) return res.status(403).json({ ok: false, error: 'ADMIN_MARKETPLACE_FORBIDDEN' })
 
       // users.manage es el permiso exclusivo de ADMIN en el seed: quien lo tiene ve todo, sin filtrar por audiencia.
       const seesEverything = !!profile && hasPermission(profile, 'users.manage')
+      const isApplicant = isTeacherApplicant(profile)
 
       const items = await prisma.item.findMany({
         where: {
@@ -187,12 +201,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
                 status: 'AVAILABLE',
                 ...(seesEverything
                   ? {}
-                  : {
-                      OR: [
-                        { visibleToRoles: { none: {} } },
-                        ...(profile ? [{ visibleToRoles: { some: { roleId: profile.roleId } } }] : []),
-                      ],
-                    }),
+                  : isApplicant
+                    ? { visibleToRoles: { none: {} } }
+                    : {
+                        OR: [
+                          { visibleToRoles: { none: {} } },
+                          ...(profile ? [{ visibleToRoles: { some: { roleId: profile.roleId } } }] : []),
+                        ],
+                      }),
               }),
         },
         orderBy: { createdAt: 'desc' },
@@ -208,6 +224,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (!profile) {
         return res.status(statusForProfileError(error)).json({ ok: false, error })
       }
+      if (isAdministrativeProfile(profile)) return res.status(403).json({ ok: false, error: 'ADMIN_MARKETPLACE_FORBIDDEN' })
       return handleRequestMutation(req, res, profile)
     }
 
@@ -215,6 +232,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (!profile) {
       const status = statusForProfileError(error)
       return res.status(status).json({ ok: false, error })
+    }
+    if (isAdministrativeProfile(profile)) return res.status(403).json({ ok: false, error: 'ADMIN_MARKETPLACE_FORBIDDEN' })
+    if (isTeacherApplicant(profile)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'TEACHER_VERIFICATION_REQUIRED',
+        message: 'Las operaciones de marketplace están suspendidas hasta que tu acreditación docente sea aprobada por administración.',
+      })
     }
     if (!hasPermission(profile, 'items.publish')) {
       return res.status(403).json({ ok: false, error: 'FORBIDDEN' })
@@ -231,6 +256,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         select: {
           ownerId: true,
           photoUrl: true,
+          photoUrls: true,
           _count: { select: { loanRequests: true, loans: true } },
         },
       })
@@ -245,7 +271,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       }
 
       await prisma.item.delete({ where: { id: parsed.data.id } })
-      return res.status(200).json({ ok: true, item: { id: parsed.data.id, photoUrl: item.photoUrl } })
+      return res.status(200).json({
+        ok: true,
+        item: { id: parsed.data.id, photoUrl: item.photoUrl, photoUrls: item.photoUrls },
+      })
     }
 
     if (req.method === 'PATCH') {
@@ -261,9 +290,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (rentalError) {
       return res.status(400).json({ ok: false, error: rentalError })
     }
+    if (parsed.data.photoUrls) {
+      for (const url of parsed.data.photoUrls) {
+        if (!isItemPhotoUrl(url)) {
+          return res.status(400).json({ ok: false, error: 'INVALID_ITEM_PHOTO' })
+        }
+      }
+    }
     if (parsed.data.photoUrl && !isItemPhotoUrl(parsed.data.photoUrl)) {
       return res.status(400).json({ ok: false, error: 'INVALID_ITEM_PHOTO' })
     }
+
+    const resolvedPhotoUrls =
+      parsed.data.photoUrls ?? (parsed.data.photoUrl ? [parsed.data.photoUrl] : [])
+    const resolvedCoverUrl = resolvedPhotoUrls[0] ?? parsed.data.photoUrl ?? null
 
     const category = await prisma.category.findUnique({ where: { key: parsed.data.categoryKey } })
     if (!category) {
@@ -281,7 +321,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         code: generateItemCode(),
         title: parsed.data.title,
         description: parsed.data.description || null,
-        photoUrl: parsed.data.photoUrl || null,
+        photoUrl: resolvedCoverUrl,
+        photoUrls: resolvedPhotoUrls,
         categoryId: category.id,
         duration: parsed.data.duration,
         mode: parsed.data.mode,
@@ -344,6 +385,13 @@ async function updateItem(req: ApiRequest, res: ApiResponse, profile: Authentica
   if (rentalError) {
     return res.status(400).json({ ok: false, error: rentalError })
   }
+  if (parsed.data.photoUrls) {
+    for (const url of parsed.data.photoUrls) {
+      if (!isItemPhotoUrl(url)) {
+        return res.status(400).json({ ok: false, error: 'INVALID_ITEM_PHOTO' })
+      }
+    }
+  }
   if (parsed.data.photoUrl && !isItemPhotoUrl(parsed.data.photoUrl)) {
     return res.status(400).json({ ok: false, error: 'INVALID_ITEM_PHOTO' })
   }
@@ -352,7 +400,14 @@ async function updateItem(req: ApiRequest, res: ApiResponse, profile: Authentica
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title
   if (parsed.data.duration !== undefined) updateData.duration = parsed.data.duration
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description || null
-  if (parsed.data.photoUrl !== undefined) updateData.photoUrl = parsed.data.photoUrl
+  if (parsed.data.photoUrls !== undefined) {
+    const urls = parsed.data.photoUrls ?? []
+    updateData.photoUrls = urls
+    updateData.photoUrl = urls[0] ?? null
+  } else if (parsed.data.photoUrl !== undefined) {
+    updateData.photoUrl = parsed.data.photoUrl
+    updateData.photoUrls = parsed.data.photoUrl ? [parsed.data.photoUrl] : []
+  }
   if (parsed.data.mode !== undefined) updateData.mode = parsed.data.mode
   if (parsed.data.status !== undefined) updateData.status = parsed.data.status
   if (mode === 'LOAN') {
