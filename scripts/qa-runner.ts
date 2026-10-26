@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import crypto from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
-import { prisma } from '../api/_lib/prisma.ts'
+import { prisma } from '../backend/_lib/prisma.ts'
 
 const BASE_URL = 'http://localhost:8787'
 

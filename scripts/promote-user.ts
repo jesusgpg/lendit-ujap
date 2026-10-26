@@ -2,7 +2,7 @@
 // (STUDENT, PROFESSOR, ADMIN, o uno creado desde el panel de administración).
 // Uso: pnpm db:promote correo@ujap.edu.ve ADMIN
 import 'dotenv/config'
-import { prisma } from '../api/_lib/prisma.ts'
+import { prisma } from '../backend/_lib/prisma.ts'
 
 const [, , email, roleName] = process.argv
 

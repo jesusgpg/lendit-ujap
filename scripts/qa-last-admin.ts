@@ -49,10 +49,10 @@ try {
   })
   process.env.SUPABASE_URL = await listen(authServer)
   process.env.SUPABASE_PUBLISHABLE_KEY = 'isolated-test-key'
-  const { prisma } = await import('../api/_lib/prisma.js')
+  const { prisma } = await import('../backend/_lib/prisma.js')
   db = prisma
-  const { default: users } = await import('../api/users/[id].js')
-  const { default: roles } = await import('../api/roles/[id].js')
+  const { default: users } = await import('../backend/users/[id].js')
+  const { default: roles } = await import('../backend/roles/[id].js')
   const app = express()
   app.use(express.json())
   for (const [route, handler] of [['users', users], ['roles', roles]] as const) {

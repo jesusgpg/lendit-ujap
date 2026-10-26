@@ -4,9 +4,13 @@
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/categories/:key", "destination": "/api/categories?key=:key" },
-    { "source": "/api/careers/:id", "destination": "/api/careers?id=:id" },
-    { "source": "/api/schools/:id", "destination": "/api/schools?id=:id" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "/api?__apiPath=:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
