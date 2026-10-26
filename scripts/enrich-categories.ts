@@ -1,6 +1,6 @@
 import 'dotenv/config'
-import { prisma } from '../api/_lib/prisma.ts'
-import { categoryPhotoData, searchCategoryPhotos, unsplashRequest, UnsplashError } from '../api/categories.ts'
+import { prisma } from '../backend/_lib/prisma.ts'
+import { categoryPhotoData, searchCategoryPhotos, unsplashRequest, UnsplashError } from '../backend/categories.ts'
 
 // Explicit opt-in. Preview performs reads/search only; --apply writes categories and tracks selections.
 const apply = process.argv.includes('--apply')
