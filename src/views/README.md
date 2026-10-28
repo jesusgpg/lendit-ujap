@@ -1,90 +1,109 @@
 # Vistas Principales de la Aplicación (`src/views/`)
 
-Esta carpeta contiene las vistas o páginas de nivel superior asociadas a las rutas de Vue Router. Cada vista orquesta componentes específicos, gestiona estados locales de página, interactúa con los almacenes de Pinia y maneja flujos de navegación.
+Esta carpeta alberga las vistas o páginas de nivel superior del frontend. Cada vista orquesta la composición de componentes, gestiona el estado reactivo de su pantalla, interactúa con los almacenes de Pinia y responde a los eventos de navegación de Vue Router.
 
 ---
 
-## Vistas Disponibles
+## 1. Mapa de Vistas y Flujo de Usuario
 
-| Vista | Ruta | Control de Acceso | Descripción |
-|---|---|---|---|
-| `LandingView.vue` | `/` | Pública | Página de inicio con hero, categorías interactivas, catálogo destacado, sección "Cómo funciona" y pilares de confianza. |
-| `CatalogView.vue` | `/catalogo` | Pública | Catálogo completo con buscador en tiempo real, filtro por categorías y modal para solicitar préstamos. |
-| `PublishView.vue` | `/publicar` | Requiere autenticación | Flujo de publicación de nuevos objetos para ponerlos a disposición de la comunidad. |
-| `MyPublicationsView.vue` | `/mis-publicaciones` | Requiere autenticación | Panel de gestión de objetos publicados por el usuario (editar, pausar, activar y eliminar). |
-| `RequestsView.vue` | `/solicitudes` | Requiere autenticación | Tablero de solicitudes de préstamo entrantes (como dueño) y salientes (como prestatario). |
-| `LoginView.vue` | `/login` | Pública | Pantalla de inicio de sesión para miembros de la comunidad con correo `@ujap.edu.ve`. |
-| `RegisterView.vue` | `/register` | Pública | Pantalla de registro de estudiantes y profesores con selección de carrera y subida de foto. |
-| `AdminLoginView.vue` | `/admin/login` | Pública | Portal de autenticación para administradores de la plataforma. |
-| `AdminView.vue` | `/admin` | Requiere permiso `roles.manage` | Centro de control del campus con pestañas para roles, usuarios, categorías y carreras. |
-
----
-
-## Detalle de Funciones por Vista
-
-### 1. `LandingView.vue`
-- `openLogin(thenOpenPublish?)`: Redirige al login, pasando la query `redirect=/publicar` si el usuario intentaba publicar.
-- `openPublish()`: Comprueba autenticación: si no hay sesión abre el login con redirección programada; si la hay, navega a `/publicar`.
-- `handleLogout()`: Dispara notificación informativa cuando se cierra la sesión.
-- `handleSelectCategory(categoryKey)`: Muestra notificación guiada sobre la categoría seleccionada o anima al usuario a compartir.
-- `handleStepCompleted(stepNum)`: Marca en `localStorage` (mediante `useLocalStorage`) qué pasos del flujo explicativo ya fueron leídos.
-- `handleRequestArticle(articleId)`: Orquesta la solicitud de un objeto: si el usuario no ha iniciado sesión lo redirige al login; si está autenticado lo envía al catálogo con el objeto enfocado.
-
----
-
-### 2. `CatalogView.vue`
-- `filteredArticles` *(computada)*: Filtra en memoria reactiva los artículos del store según la categoría seleccionada y la coincidencia de texto en título, categoría, duración o descripción.
-- `loadCatalog()`: Ejecuta concurrentemente `articlesStore.load()` y `catalogStore.initialize()`.
-- `handleRequest(articleId)`: Verifica autenticación. Si el usuario no ha iniciado sesión, lo redirige a `/login?redirect=/catalogo`; si es el dueño del objeto lo notifica; de lo contrario abre el modal con `RequestLoanForm`.
-- `handleRequestSubmitted()`: Cierra el modal de solicitud, emite alerta de éxito y recarga el catálogo.
+```mermaid
+graph TD
+    Landing[LandingView: /] -->|Explorar| Catalog[CatalogView: /catalogo]
+    Landing -->|Iniciar Sesión| Login[LoginView: /login]
+    Landing -->|Registrarse| Register[RegisterView: /register]
+    Landing -->|Acceso Admin| AdminLogin[AdminLoginView: /admin/login]
+    
+    Catalog -->|Pedir Objeto| RequestModal[RequestLoanForm Modal]
+    RequestModal -.->|Requiere Sesión| Login
+    
+    Login -->|Sesión Iniciada| Catalog
+    Login -->|Sesión Iniciada| Publish[PublishView: /publicar]
+    
+    Publish -->|Objeto Creado| MyPubs[MyPublicationsView: /mis-publicaciones]
+    Catalog -->|Ver Solicitudes| Requests[RequestsView: /solicitudes]
+    
+    AdminLogin -->|Autenticado con Permiso| Admin[AdminView: /admin]
+    Admin --> AdminRoles[Roles y Permisos]
+    Admin --> AdminUsers[Gestión de Usuarios]
+    Admin --> AdminCategories[Categorías]
+    Admin --> AdminCareers[Carreras]
+```
 
 ---
 
-### 3. `PublishView.vue`
-- `handlePublished()`: Muestra notificación de éxito con Notivue y redirige a `/mis-publicaciones` tras crear exitosamente un objeto.
+## 2. Detalle Exhaustivo de Vistas y Lógica de Negocio
+
+### `LandingView.vue` (`/`)
+Página de bienvenida de la red de préstamos universitaria.
+
+- **Componentes Empleados**: `SiteHeader`, `CategoryCard`, `StepCard`, `SiteFooter`.
+- **Persistencia de Pasos Leídos**: Utiliza la utilidad `useLocalStorage` de `@vueuse/core` vinculada a la clave `lendit:completed-steps` para marcar interactivamente qué pasos del proceso ("Publica lo que no usas", "Pide lo que necesitas", "Devuelve a tiempo") han sido completados por el visitante.
+- **Redirección Contextual (`openPublish`)**: Si un usuario no autenticado hace clic en "Publicar un objeto", la vista lo redirige a `/login?redirect=/publicar` para que, tras iniciar sesión, el sistema lo conduzca automáticamente a la pantalla de publicación.
 
 ---
 
-### 4. `MyPublicationsView.vue`
-- `availableCount` / `pausedCount` *(computadas)*: Contadores reactivos de publicaciones activas o en pausa.
-- `statusLabel(status)`: Traduce estados técnicos (`available` $\to$ 'Disponible', `paused` $\to$ 'Pausado', `lent` $\to$ 'En préstamo').
-- `formatDate(value)`: Formatea la fecha de publicación con `Intl.DateTimeFormat`.
-- `formatOffer(article)`: Retorna si el artículo es gratuito o su monto formateado.
-- `openEdit(article)` / `closeEdit()`: Controla la apertura y cierre del modal de edición que contiene `PublishArticleForm`.
-- `handleUpdated()`: Notifica con Notivue y cierra el modal de edición.
-- `toggleStatus(article)`: Invoca `articlesStore.setStatus()` para alternar entre `'available'` y `'paused'`.
-- `askDelete(article)` / `cancelDelete()`: Abre o cancela el diálogo modal de confirmación de eliminación.
-- `confirmDelete()`: Ejecuta `articlesStore.remove()`, remueve la foto física de Storage vía `removeItemPhoto()` y actualiza la lista.
+### `CatalogView.vue` (`/catalogo`)
+Explorador del catálogo de artículos disponibles en el campus.
+
+- **Filtro y Búsqueda en Memoria (`filteredArticles`)**:
+  - Filtro por categoría seleccionada (`selectedCategory: 'all' | categoryKey`).
+  - Búsqueda en tiempo real sobre título, categoría, duración y descripción sin peticiones adicionales al servidor.
+- **Flujo de Solicitud de Préstamo (`handleRequest`)**:
+  - Si el usuario no ha iniciado sesión, guarda el estado y redirige a `/login?redirect=/catalogo`.
+  - Si el usuario es el dueño del artículo, muestra una notificación preventiva indicando que no puede auto-solicitarse su propio objeto.
+  - Si es apto, abre el diálogo modal con el componente `RequestLoanForm` preconfigurado con el artículo elegido.
+  - Al recibir el evento `submitted`, cierra el modal, muestra la notificación flotante de Notivue y actualiza el catálogo.
 
 ---
 
-### 5. `RequestsView.vue`
-- `incomingRequests` / `outgoingRequests` *(computadas)*: Separa las solicitudes donde el usuario es el dueño del objeto de aquellas donde es el prestatario.
-- `pendingCount` / `activeLoanCount` *(computadas)*: Métricas para los contadores superiores.
-- `statusLabel(status)` / `formatDateRange(request)` / `formatOffer(request)`: Utilidades de formateo visual para fechas, estados y montos.
-- `performAction(request, action)`: Despacha acciones de ciclo de vida (`approve`, `reject`, `cancel`, `return`) a través de `requestsStore.act()` y refresca el catálogo general.
+### `PublishView.vue` (`/publicar`)
+Pantalla dedicada a dar de alta un nuevo objeto en el sistema.
+
+- **Ruta Protegida**: Requiere sesión activa (`meta: { requiresAuth: true }`).
+- **Lógica de Publicación (`handlePublished`)**: Tras la emisión del evento `published` por parte del formulario `PublishArticleForm`, muestra una notificación de éxito con Notivue y reemplaza la ruta hacia `/mis-publicaciones` para que el estudiante visualice su nuevo objeto de inmediato.
 
 ---
 
-### 6. `LoginView.vue`
-- `getRedirectQuery()`: Conserva el parámetro `redirect` de la URL para no perder el destino tras iniciar sesión.
-- `handleLoginSuccess()`: Procesa la redirección posterior al inicio de sesión (hacia la ruta original o a `/`).
-- `openRegister()`: Redirige a la pantalla de registro conservando parámetros de redirección.
+### `MyPublicationsView.vue` (`/mis-publicaciones`)
+Panel de administración personal para los objetos publicados por el usuario.
+
+- **Métricas Superiores**: Contadores computados de artículos disponibles (`availableCount`) y pausados (`pausedCount`).
+- **Edición Completa (`openEdit`)**: Abre un diálogo modal con `PublishArticleForm` cargado con los datos del artículo existente para modificar descripciones, plazos, modalidades o fotos.
+- **Pausa y Reactivación (`toggleStatus`)**: Invoca de forma asíncrona `articlesStore.setStatus(article.id, nuevoEstado)`, alternando la visibilidad del objeto en el catálogo público sin tener que eliminarlo.
+- **Eliminación Segura con Confirmación (`askDelete` y `confirmDelete`)**:
+  - Abre un diálogo modal de confirmación advirtiendo que la acción no se puede deshacer.
+  - Comprueba en el backend que el objeto no tenga préstamos activos ni solicitudes pendientes.
+  - Elimina el registro del artículo y remueve la imagen física en Supabase Storage mediante `removeItemPhoto()`.
 
 ---
 
-### 7. `RegisterView.vue`
-- `goToLogin()`: Navega al login conservando la URL de retorno.
-- `handleRegisterSuccess()`: Notifica que la cuenta fue creada y redirige al destino original o a la landing.
+### `RequestsView.vue` (`/solicitudes`)
+Centro de control de préstamos para coordinar entregas y devoluciones.
+
+- **Segmentación de Solicitudes**:
+  - **Recibidas (`incomingRequests`)**: Solicitudes de terceros sobre objetos de los cuales el usuario es el propietario legítimo.
+  - **Enviadas (`outgoingRequests`)**: Solicitudes que el usuario realizó sobre objetos de otros compañeros.
+- **Acciones Disponibles por Rol**:
+  - **Como Dueño**: Puede aprobar (`approve`) o rechazar (`reject`) solicitudes pendientes.
+  - **Como Solicitante**: Puede cancelar (`cancel`) su solicitud pendiente si ya no requiere el objeto.
+  - **Cualquiera de las Partes**: Puede marcar la devolución física del objeto (`return`), lo que restaura automáticamente la disponibilidad del artículo a `AVAILABLE` en el catálogo general.
 
 ---
 
-### 8. `AdminLoginView.vue`
-- `getAdminDestination()`: Determina la ruta interna de administración a la que debe volver el usuario (`/admin`).
-- `handleLoginSuccess()`: Redirige al panel administrativo tras validar credenciales con permisos de administrador.
+### `AdminView.vue` (`/admin`)
+Panel de control del campus universitario reservado para usuarios con permiso `roles.manage`.
+
+- **Navegación Lateral por Pestañas**:
+  - **Roles y Permisos (`/admin/roles`)**: Carga el componente `RoleManagerPanel`.
+  - **Usuarios (`/admin/users`)**: Carga el componente `UsersManagerPanel`.
+  - **Categorías (`/admin/categories`)**: Carga el componente `CategoriesManagerPanel`.
+  - **Carreras y Escuelas (`/admin/careers`)**: Carga el componente `CareersManagerPanel`.
+- **Sincronización de Rutas**: Utiliza `router-view` anidado con rutas hijas para permitir navegación directa por URL y marcadores en el navegador.
 
 ---
 
-### 9. `AdminView.vue`
-- `activeSection` *(computada)*: Determina la pestaña actual activa en la barra lateral (`roles`, `users`, `categories`, `careers`).
-- `openSection(routeName)`: Navega entre las subrutas administrativas usando Vue Router.
+### `LoginView.vue`, `RegisterView.vue` y `AdminLoginView.vue`
+Vistas de autenticación adaptadas según el contexto del usuario.
+
+- Envueltas por el layout `AuthPageShell` con estética unificada.
+- Mantienen el parámetro `redirect` en la URL para devolver al usuario a la pantalla en la que se encontraba previamente una vez culminado el ingreso exitoso.

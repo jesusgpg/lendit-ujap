@@ -1,118 +1,128 @@
 # Endpoints Serverless de la API (`api/`)
 
-Esta carpeta contiene los controladores y funciones serverless ejecutadas en Vercel (o en local mediante el servidor Express de desarrollo `server/dev-api.ts`). Cada archivo exporta por defecto una función `handler(req, res)` que procesa las solicitudes HTTP para un recurso específico del sistema.
+Esta carpeta alberga los controladores serverless que exponen la API REST de LendIt UJAP. Se ejecutan como Vercel Serverless Functions en producción y bajo un servidor Express en desarrollo local (`npm run dev:api`).
 
 ---
 
-## Controladores y Endpoints
+## 1. Matriz de Endpoints y Permisos
 
-### 1. `health.ts` (`/api/health`)
-Endpoint de diagnóstico para comprobar el estado de conexión con la base de datos PostgreSQL.
-
-- **Método**: `GET`
-- **Funciones**:
-  - `handler(req: ApiRequest, res: ApiResponse)`: Ejecuta una consulta ligera `SELECT 1` mediante Prisma. Retorna HTTP 200 con `{ ok: true, database: 'up' }` si la conexión es exitosa, o HTTP 503 con `{ ok: false, database: 'down' }` en caso de fallo.
-
----
-
-### 2. `items.ts` (`/api/items`)
-Controlador central para la gestión del catálogo de artículos y el ciclo de vida de solicitudes de préstamo asociadas.
-
-- **Métodos**: `GET`, `POST`, `PATCH`, `DELETE`
-- **Funciones**:
-  - `serializeItem(item)`: Transforma la entidad de Prisma a la interfaz `Article` del frontend, mapeando estados (`AVAILABLE` $\to$ `available`), formateando fechas e incluyendo audiencia permitida.
-  - `generateItemCode()`: Genera un código único alfanumérico con formato `#UJAP-XXXXXXXX`.
-  - `queryValue(value)`: Normaliza parámetros de búsqueda de la URL tanto si vienen como arreglo o como cadena individual.
-  - `bodyResource(body)`: Identifica si el cuerpo de la petición va dirigido a un recurso secundario (e.g. `'request'`).
-  - `isItemPhotoUrl(photoUrl)`: Verifica que la URL de una foto pertenezca al bucket seguro `item-photos` de la instancia de Supabase configurada.
-  - `validateRental(mode, price, currency)`: Garantiza que los artículos configurados como `RENTAL` tengan un precio positivo y una divisa válida (`USD`, `EUR`, `VES`).
-  - `resolveRoleIds(roleNames)`: Convierte nombres de roles en sus respectivos IDs de base de datos para la configuración de visibilidad por roles.
-  - `handler(req, res)`:
-    - `GET`: Si `view=requests`, lista solicitudes vía `listRequests()`. Si `mine=1`, lista solo los objetos del usuario autenticado. En el catálogo público, filtra objetos disponibles según el rol del usuario (o sin restricciones para administradores con `users.manage`).
-    - `POST / PATCH con resource='request'`: Delega la mutación a `handleRequestMutation()` para crear o actualizar el estado de solicitudes de préstamo.
-    - `POST`: Crea un nuevo objeto publicado por el usuario, asociando categoría, duración, modalidad de préstamo/alquiler y audiencia restringida opcional.
-    - `PATCH`: Actualiza campos de un objeto existente (título, descripción, foto, estado disponible/pausado, etc.) previa validación de propiedad o permisos administrativos.
-    - `DELETE`: Elimina un artículo si el usuario es dueño y no posee historial de préstamos o solicitudes activas.
-  - `updateItem(req, res, profile)`: Lógica transaccional para actualizar las propiedades de un artículo y su visibilidad de roles, previniendo modificaciones de términos si existen solicitudes pendientes.
+| Endpoint | Métodos | Permiso Requerido | Descripción Rápida |
+|---|---|---|---|
+| `/api/health` | `GET` | Ninguno (público) | Comprobación de salud de conexión a la base de datos PostgreSQL. |
+| `/api/items` | `GET` | Ninguno / Autenticado | Catálogo de artículos disponibles o solicitudes del usuario (`?view=requests`). |
+| `/api/items` | `POST` | `items.publish` | Publicación de un nuevo objeto para préstamo o alquiler. |
+| `/api/items` *(resource: request)* | `POST` | `items.rent` | Emisión de una solicitud de préstamo sobre un objeto. |
+| `/api/items` | `PATCH` | Dueño / `users.manage` | Actualización de datos de un objeto (título, descripción, foto, pausa). |
+| `/api/items` *(resource: request)* | `PATCH` | `items.rent` | Transiciones de estado de solicitudes (`approve`, `reject`, `cancel`, `return`). |
+| `/api/items` | `DELETE` | Dueño / `users.manage` | Eliminación de un artículo sin historial activo de préstamos. |
+| `/api/me` | `GET` | Autenticado | Obtención del perfil, rol y permisos del usuario autenticado. |
+| `/api/me` | `PATCH` | Autenticado / `profile.update` | Actualización o inicialización del perfil de usuario y foto. |
+| `/api/categories` | `GET` | Ninguno (público) | Lista de categorías disponibles. |
+| `/api/categories` | `POST` | `categories.manage` | Creación de una nueva categoría temática. |
+| `/api/categories/:key` | `PATCH`, `DELETE` | `categories.manage` | Modificación o eliminación de una categoría existente. |
+| `/api/careers` | `GET` | Ninguno (público) | Lista de carreras académicas y escuelas. |
+| `/api/careers` | `POST` | `careers.manage` | Registro de una nueva carrera universitaria. |
+| `/api/careers/:id` | `PATCH`, `DELETE` | `careers.manage` | Modificación o retiro de una carrera sin estudiantes asociados. |
+| `/api/schools` | `GET`, `POST` | `careers.manage` (POST) | Lista y registro de facultades/escuelas universitarias. |
+| `/api/roles` | `GET`, `POST` | Autenticado (GET) / `roles.manage` (POST) | Consulta de roles y creación de nuevos roles con permisos asignados. |
+| `/api/permissions` | `GET` | `roles.manage` | Catálogo maestro de permisos del sistema. |
+| `/api/users` | `GET` | `users.manage` | Directorio de usuarios para el panel de administración. |
 
 ---
 
-### 3. `me.ts` (`/api/me`)
-Gestiona el perfil del usuario autenticado y la sincronización entre Supabase Auth y la tabla `User` de la base de datos.
+## 2. Especificación Técnica por Controlador
 
-- **Métodos**: `GET`, `PATCH`
-- **Funciones**:
-  - `metadataValue(metadata, key)`: Obtiene valores de tipo cadena desde los metadatos de Supabase.
-  - `isUuid(value)`: Valida el formato canónico de un UUID v4.
-  - `serializeProfile(profile)`: Formatea el registro de usuario combinando nombre, correo, carrera, teléfono, foto, rol y lista de permisos.
-  - `handler(req, res)`:
-    - `GET`: Consulta y retorna el perfil completo del usuario autenticado. Si el perfil aún no existe en PostgreSQL, responde 409 (`PROFILE_REQUIRED`) para activar la creación/sincronización.
-    - `PATCH`: Actualiza datos del perfil (nombre, apellido, teléfono, carrera, foto). Si el usuario no tenía registro previo en base de datos, lo inicializa automáticamente como rol `STUDENT`.
+### `items.ts` (`/api/items`)
+Controlador central que orquesta tanto la gestión de artículos como el punto de entrada para las mutaciones de solicitudes de préstamo.
 
----
+#### Parámetros de Consulta (`req.query`)
+- `mine=1` o `mine=true`: Filtra exclusivamente los objetos cuyo dueño es el usuario autenticado (`ownerId === profile.id`), incluyendo artículos pausados.
+- `view=requests`: Desvía la respuesta hacia `listRequests()` para devolver las solicitudes entrantes y salientes del usuario.
 
-### 4. `categories.ts` (`/api/categories` y `/api/categories/:key`)
-Administración de categorías del catálogo de artículos.
+#### Ejemplos de Carga Útil (Payloads)
 
-- **Métodos**: `GET`, `POST`, `PATCH`, `DELETE`
-- **Funciones**:
-  - `handler(req, res)`:
-    - `GET`: Retorna todas las categorías ordenadas alfabéticamente por etiqueta (público).
-    - `POST`: Crea una nueva categoría con clave, etiqueta, icono y descripción (requiere permiso `categories.manage`).
-    - `PATCH`: Actualiza los datos de una categoría identificada por su `key` (requiere `categories.manage`).
-    - `DELETE`: Elimina una categoría si no tiene artículos asociados actualmente (requiere `categories.manage`).
+##### Creación de Artículo (`POST /api/items`)
+```json
+{
+  "title": "Bata de Laboratorio Talla M",
+  "categoryKey": "herramientas",
+  "duration": "2 días",
+  "description": "Limpia y en perfecto estado, obligatoria para Química I.",
+  "photoUrl": "https://.../storage/v1/object/public/item-photos/usr123/foto.jpg",
+  "mode": "RENTAL",
+  "price": 2.50,
+  "currency": "USD",
+  "restrictedToRoles": ["STUDENT"]
+}
+```
 
----
+##### Creación de Solicitud (`POST /api/items`)
+```json
+{
+  "resource": "request",
+  "itemId": "8a7f9b2c-...",
+  "startsAt": "2026-10-30T08:00:00.000Z",
+  "endsAt": "2026-10-30T16:00:00.000Z",
+  "message": "¿Podemos vernos frente a la biblioteca?"
+}
+```
 
-### 5. `careers.ts` (`/api/careers` y `/api/careers/:id`)
-Administración de carreras universitarias y su adscripción a facultades/escuelas.
-
-- **Métodos**: `GET`, `POST`, `PATCH`, `DELETE`
-- **Funciones**:
-  - `serializeCareer(career)`: Serializa el ID, nombre de la carrera y datos de la escuela asociada.
-  - `handler(req, res)`:
-    - `GET`: Retorna la lista de carreras activas con su escuela asociada (público).
-    - `POST`: Registra una nueva carrera (requiere permiso `careers.manage`).
-    - `PATCH`: Modifica el nombre o la escuela de una carrera (requiere `careers.manage`).
-    - `DELETE`: Elimina una carrera únicamente si no tiene estudiantes registrados en ella (requiere `careers.manage`).
-
----
-
-### 6. `schools.ts` (`/api/schools`)
-Administración de facultades y escuelas universitarias.
-
-- **Métodos**: `GET`, `POST`
-- **Funciones**:
-  - `handler(req, res)`:
-    - `GET`: Lista las escuelas ordenadas alfabéticamente.
-    - `POST`: Crea una nueva escuela universitaria (requiere permiso `careers.manage`).
+##### Acción sobre Solicitud (`PATCH /api/items`)
+```json
+{
+  "resource": "request",
+  "action": "approve",
+  "requestId": "5e1a2b3c-..."
+}
+```
 
 ---
 
-### 7. `roles.ts` (`/api/roles`)
-Gestión general de roles y asignación de permisos.
+### `me.ts` (`/api/me`)
+Sincroniza y expone el perfil de usuario.
 
-- **Métodos**: `GET`, `POST`
-- **Funciones**:
-  - `serializeRole(role)`: Formatea el rol extrayendo la lista de claves de permisos asociados.
-  - `handler(req, res)`:
-    - `GET`: Lista todos los roles existentes con sus permisos (accesible a usuarios autenticados).
-    - `POST`: Crea un nuevo rol en el sistema y le asocia los permisos indicados (requiere permiso `roles.manage`).
+- **Sincronización Automática**: Si un usuario se autentica por primera vez y el trigger de base de datos no creó su fila (por ejemplo en migraciones tempranas), responderá con `409 PROFILE_REQUIRED`. El cliente enviará un `PATCH` vacío y `me.ts` creará automáticamente el registro en la tabla `User` asignando el rol `STUDENT` a partir de los metadatos seguros de Supabase Auth.
+- **Respuesta de Perfil (`GET`)**:
+```json
+{
+  "ok": true,
+  "user": {
+    "id": "usr_9988",
+    "name": "Ana Rodríguez",
+    "firstName": "Ana",
+    "lastName": "Rodríguez",
+    "email": "ana.rodriguez@ujap.edu.ve",
+    "career": "Ingeniería de Computación",
+    "careerId": "car_1234",
+    "phone": "04141234567",
+    "photo": "https://.../avatar.jpg",
+    "role": "STUDENT",
+    "permissions": ["items.publish", "items.rent", "profile.update"],
+    "emailVerifiedAt": "2026-09-20T10:00:00.000Z"
+  }
+}
+```
 
 ---
 
-### 8. `permissions.ts` (`/api/permissions`)
-Catálogo de permisos de seguridad del sistema.
-
-- **Métodos**: `GET`
-- **Funciones**:
-  - `handler(req, res)`: Retorna la lista completa de permisos disponibles con su clave y descripción (requiere permiso `roles.manage`).
+### `categories.ts` (`/api/categories` y `/api/categories/:key`)
+- Valida que las claves se transformen a minúsculas y reemplacen espacios por guiones (`v.toLowerCase().replace(/\s+/g, '-')`).
+- `DELETE` comprueba que la categoría no tenga objetos vinculados (`itemsUsingCategory === 0`), devolviendo `409 CATEGORY_IN_USE` en caso contrario.
 
 ---
 
-### 9. `users.ts` (`/api/users`)
-Listado de usuarios registrados en el sistema para el panel administrativo.
+### `careers.ts` (`/api/careers` y `/api/careers/:id`)
+- Permite vincular una carrera a una facultad (`schoolId`).
+- `DELETE` valida que no existan usuarios inscritos en la carrera (`prisma.user.count({ where: { careerId: id } })`), previniendo errores de integridad referencial.
 
-- **Métodos**: `GET`
-- **Funciones**:
-  - `handler(req, res)`: Retorna los últimos 100 usuarios registrados con su nombre completo, correo, carrera, rol y estado activo/inactivo (requiere permiso `users.manage`).
+---
+
+### `roles.ts` (`/api/roles`)
+- Normaliza nombres de roles en mayúsculas con guiones bajos (ej. `PREFECTO_AULA`).
+- Permite asociar una lista de claves de permisos (`permissionKeys: string[]`) que se traducen en inserciones en `RolePermission`.
+
+---
+
+### `health.ts` (`/api/health`)
+- Ejecuta `prisma.$queryRaw\`SELECT 1\``.
+- Devuelve HTTP 200 `{ ok: true, database: "up" }` o HTTP 503 `{ ok: false, database: "down" }`.
