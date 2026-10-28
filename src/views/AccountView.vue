@@ -14,13 +14,15 @@ import AccountMenuIcon from '../components/AccountMenuIcon.vue'
 import StudentCardPanel from '../components/StudentCardPanel.vue'
 import TeacherCredentialPanel from '../components/TeacherCredentialPanel.vue'
 import AccountSecurityPanel from '../components/AccountSecurityPanel.vue'
+import PaymentsAccountPanel from '../components/PaymentsAccountPanel.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 
 const auth = useAuthStore()
 const catalog = useCatalogStore()
 const route = useRoute()
-const sections = computed<{ id: string; label: string; description: string; icon: 'profile' | 'objects' | 'accessibility' | 'admin' }[]>(() => [
+const sections = computed<{ id: string; label: string; description: string; icon: 'profile' | 'objects' | 'accessibility' | 'admin' | 'payments' }[]>(() => [
   { id: 'perfil', label: 'Perfil', description: 'Tus datos personales y académicos', icon: 'profile' },
+  ...(!auth.isAdmin ? [{ id: 'pagos', label: 'Pagos y saldo', description: 'Wallet y recargas', icon: 'payments' as const }] : []),
   ...(!auth.isAdmin && (auth.user?.role === 'PROFESSOR' || !!auth.user?.teacherVerification)
     ? [{ id: 'acreditacion', label: 'Acreditación docente', description: 'Credencial y estado de validación', icon: 'objects' as const }]
     : []),
@@ -175,6 +177,7 @@ onMounted(loadCareers)
           </template>
           <TeacherCredentialPanel v-else-if="section.id === 'acreditacion'" />
           <StudentCardPanel v-else-if="section.id === 'carnet'" />
+          <PaymentsAccountPanel v-else-if="section.id === 'pagos' && !auth.isAdmin" />
           <AccountSecurityPanel v-else-if="section.id === 'seguridad'" />
           <section v-else class="account-preferences" aria-labelledby="preferences-title">
             <header class="account-page__section-title"><h2 id="preferences-title">Apariencia y accesibilidad</h2><p>Los cambios se aplican y guardan automáticamente en este navegador.</p></header>

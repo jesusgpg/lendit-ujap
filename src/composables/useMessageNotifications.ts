@@ -46,6 +46,7 @@ export function useMessageNotifications() {
 
     void inbox.load()
     if (isViewingThread(message)) return
+    if (!inbox.markNewMessage(message.id)) return
 
     const thread = findThread(message)
     const preview = message.content.trim().replace(/\s+/g, ' ')

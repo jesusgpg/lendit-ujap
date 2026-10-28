@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { Prisma } from '../../generated/prisma/client.js'
 import { prisma } from './prisma.js'
 import { hasPermission, isTeacherApplicant, type ApiRequest, type ApiResponse, type AuthenticatedProfile } from './auth.js'
 import { canManageOwnedResource, canSeeRestrictedItem, requestDateError } from './workflowRules.js'
@@ -153,6 +154,63 @@ function parseDateRange(startsAt: string, endsAt: string) {
 
 async function findRequest(requestId: string) {
   return prisma.loanRequest.findUnique({ where: { id: requestId }, include: requestInclude })
+}
+
+async function refundRentalPayment(transaction: Prisma.TransactionClient, requestId: string) {
+  const record = await transaction.loanRequest.findUnique({
+    where: { id: requestId },
+    select: {
+      requesterId: true,
+      item: { select: { ownerId: true } },
+      payment: { select: { id: true, status: true, amount: true, currency: true } },
+    },
+  })
+  const payment = record?.payment
+  if (!record || !payment) return
+  if (payment.status !== 'SIMULATED_PAID') return
+
+  const amount = Number(payment.amount.toString())
+  const ownerAccount = await transaction.walletAccount.upsert({
+    where: { userId_currency: { userId: record.item.ownerId, currency: payment.currency } },
+    create: { userId: record.item.ownerId, currency: payment.currency, balance: 0 },
+    update: {},
+  })
+  const requesterAccount = await transaction.walletAccount.upsert({
+    where: { userId_currency: { userId: record.requesterId, currency: payment.currency } },
+    create: { userId: record.requesterId, currency: payment.currency, balance: 0 },
+    update: {},
+  })
+
+  const reversedOwnerCredit = await transaction.walletTransaction.createMany({
+    data: [{
+      accountId: ownerAccount.id,
+      userId: record.item.ownerId,
+      paymentId: payment.id,
+      type: 'RENTAL_REVERSAL',
+      amount: payment.amount.mul(-1),
+      description: 'Reverso de alquiler rechazado',
+    }],
+    skipDuplicates: true,
+  })
+  if (reversedOwnerCredit.count) {
+    await transaction.walletAccount.update({ where: { id: ownerAccount.id }, data: { balance: { decrement: payment.amount } } })
+  }
+
+  const refund = await transaction.walletTransaction.createMany({
+    data: [{
+      accountId: requesterAccount.id,
+      userId: record.requesterId,
+      paymentId: payment.id,
+      type: 'RENTAL_REFUND',
+      amount,
+      description: 'Reintegro de solicitud rechazada',
+    }],
+    skipDuplicates: true,
+  })
+  if (refund.count) {
+    await transaction.walletAccount.update({ where: { id: requesterAccount.id }, data: { balance: { increment: payment.amount } } })
+  }
+  await transaction.payment.updateMany({ where: { id: payment.id, status: 'SIMULATED_PAID' }, data: { status: 'REFUNDED' } })
 }
 
 export async function listRequests(profile: AuthenticatedProfile, res: ApiResponse) {
@@ -403,10 +461,7 @@ async function approveRequest(requestId: string, res: ApiResponse, profile: Auth
       if (competing.length) {
         const ids = competing.map(({ id }) => id)
         await transaction.loanRequest.updateMany({ where: { id: { in: ids } }, data: { status: 'REJECTED' } })
-        await transaction.payment.updateMany({
-          where: { requestId: { in: ids } },
-          data: { status: 'REFUNDED' },
-        })
+        for (const competingId of ids) await refundRentalPayment(transaction, competingId)
       }
 
       return transaction.loanRequest.findUniqueOrThrow({ where: { id: updated.id }, include: requestInclude })
@@ -442,10 +497,7 @@ async function rejectOrCancelRequest(
       if (!result.count) {
         throw new RequestWorkflowError(409, 'REQUEST_ALREADY_PROCESSED')
       }
-      await transaction.payment.updateMany({
-        where: { requestId },
-        data: { status: 'REFUNDED' },
-      })
+      await refundRentalPayment(transaction, requestId)
       return transaction.loanRequest.findUniqueOrThrow({ where: { id: requestId }, include: requestInclude })
     })
 

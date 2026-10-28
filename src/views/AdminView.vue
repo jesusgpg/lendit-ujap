@@ -12,6 +12,7 @@ const allSections = [
   { id: 'categories', routeName: 'admin-categories', permission: 'categories.manage', label: 'Tipos de artículo', icon: '▤', hint: 'Ordena los objetos que se pueden prestar.' },
   { id: 'schools', routeName: 'admin-schools', permission: 'careers.manage', label: 'Escuelas', icon: '⌂', hint: 'Crea y mantén las escuelas de la universidad.' },
   { id: 'careers', routeName: 'admin-careers', permission: 'careers.manage', label: 'Carreras', icon: '✎', hint: 'Mantén actualizada la estructura académica.' },
+  { id: 'payments', routeName: 'admin-payments', permission: 'payments.manage', label: 'Pago Móvil', icon: '$', hint: 'Configura la cuenta central que recibe las transferencias.' },
 ] as const
 
 const auth = useAuthStore()

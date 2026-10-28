@@ -15,6 +15,7 @@ const paths = {
   chevron: 'm9 5 7 7-7 7',
   down: 'm6 9 6 6 6-6',
   admin: 'M12 3 3 7v5c0 5 9 9 9 9s9-4 9-9V7l-9-4Zm-4 9 3 3 5-6',
+  payments: 'M3 7h18M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 9h5',
 }
 defineProps<{ name: keyof typeof paths }>()
 </script>

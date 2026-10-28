@@ -29,25 +29,26 @@ function onCheckoutCompleted(_payment: PaymentRecord) {
 
 function paymentBadgeInfo(request: LoanRequest) {
   if (request.item.mode !== 'RENTAL') return null
+  if (['REJECTED', 'CANCELLED'].includes(request.status) && request.payment?.status !== 'REFUNDED') return null
   const status = request.payment?.status ?? 'PENDING'
   switch (status) {
     case 'SIMULATED_PAID':
       return {
-        label: 'Pago simulado registrado',
+        label: 'Pago aprobado',
         class: 'request-payment--paid',
         icon: '✓',
         status: 'SIMULATED_PAID',
       }
     case 'FAILED':
       return {
-        label: 'Pago simulado fallido',
+        label: 'Pago no completado',
         class: 'request-payment--failed',
         icon: '⚠',
         status: 'FAILED',
       }
     case 'REFUNDED':
       return {
-        label: 'Pago simulado devuelto',
+        label: 'Saldo reintegrado',
         class: 'request-payment--refunded',
         icon: '↩',
         status: 'REFUNDED',
@@ -55,7 +56,7 @@ function paymentBadgeInfo(request: LoanRequest) {
     case 'PENDING':
     default:
       return {
-        label: 'Pago simulado pendiente',
+        label: 'Pago pendiente',
         class: 'request-payment--pending',
         icon: '⏳',
         status: 'PENDING',
@@ -143,7 +144,7 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
     await requestsStore.load()
     const messages: Record<typeof action, string> = {
       approve: 'La solicitud fue aprobada y el objeto pasó a préstamo activo.',
-      reject: 'La solicitud fue rechazada y el pago simulado quedó devuelto.',
+      reject: 'Solicitud rechazada. Si ya pagaste, el saldo volvió a tu wallet.',
       cancel: 'La solicitud fue cancelada.',
       return: 'La devolución quedó registrada y el objeto volvió a estar disponible.',
     }
@@ -236,7 +237,7 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
                   {{ paymentBadgeInfo(request)?.label }}
                 </span>
                 <span v-if="request.item.mode === 'RENTAL' && request.payment?.status !== 'SIMULATED_PAID' && request.status === 'PENDING' && !isRequestExpired(request)" class="request-payment-hint">
-                  El solicitante debe completar el pago simulado antes de que puedas aceptar.
+                  El solicitante debe completar el pago antes de que puedas aceptar.
                 </span>
                 <span v-if="isRequestExpired(request)" class="request-payment-hint request-payment-hint--expired">
                   Esta solicitud ha vencido porque la fecha de inicio ya pasó.
@@ -260,7 +261,7 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
                     class="request-card__action request-card__action--primary"
                     type="button"
                     :disabled="busyKey === `approve:${request.id}:` || (request.item.mode === 'RENTAL' && request.payment?.status !== 'SIMULATED_PAID')"
-                    :title="request.item.mode === 'RENTAL' && request.payment?.status !== 'SIMULATED_PAID' ? 'Esperando pago simulado del solicitante' : undefined"
+                    :title="request.item.mode === 'RENTAL' && request.payment?.status !== 'SIMULATED_PAID' ? 'Esperando validación del pago' : undefined"
                     @click="performAction(request, 'approve')"
                   >
                     {{

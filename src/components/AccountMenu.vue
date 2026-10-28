@@ -2,10 +2,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useMessagesStore } from '../stores/messages'
 import { memberRoleLabel } from '../lib/roleLabels'
 import AccountMenuIcon from './AccountMenuIcon.vue'
 
 const authStore = useAuthStore()
+const messagesStore = useMessagesStore()
 const router = useRouter()
 const route = useRoute()
 const emit = defineEmits<{ (e: 'logout'): void; (e: 'open'): void }>()
@@ -21,6 +23,9 @@ const roleLabel = computed(() => authStore.isAdmin ? 'Administración' : memberR
 function closeMenu(restoreFocus = false) {
   isMenuOpen.value = false
   if (restoreFocus) menuTrigger.value?.focus({ preventScroll: true })
+}
+function clearMessageNotifications() {
+  messagesStore.clearNewMessageNotifications()
 }
 function menuActions() {
   return Array.from(menuPanel.value?.querySelectorAll<HTMLElement>('button:not([disabled]),a[href]') ?? [])
@@ -112,7 +117,7 @@ function handleLogout() {
         </button>
         <nav class="account-menu__shortcuts" aria-label="Accesos principales">
           <router-link :to="authStore.isAdmin ? '/admin' : '/inicio'" @click="closeMenu()"><AccountMenuIcon :name="authStore.isAdmin ? 'admin' : 'home'" /><span>{{ authStore.isAdmin ? 'Administración' : 'Mi inicio' }}</span></router-link>
-          <router-link :to="authStore.isAdmin ? '/catalogo' : '/mensajes'" @click="closeMenu()"><AccountMenuIcon :name="authStore.isAdmin ? 'search' : 'messages'" /><span>{{ authStore.isAdmin ? 'Explorar' : 'Mensajes' }}</span></router-link>
+          <router-link :to="authStore.isAdmin ? '/catalogo' : '/mensajes'" :aria-label="!authStore.isAdmin && messagesStore.hasNewMessages ? 'Mensajes, tienes mensajes nuevos' : undefined" @click="clearMessageNotifications(); closeMenu()"><AccountMenuIcon :name="authStore.isAdmin ? 'search' : 'messages'" /><span>{{ authStore.isAdmin ? 'Explorar' : 'Mensajes' }}</span><span v-if="!authStore.isAdmin && messagesStore.hasNewMessages" class="account-menu__message-dot" aria-hidden="true"></span></router-link>
         </nav>
         <nav v-if="!authStore.isAdmin" class="account-menu__activity" aria-label="Tu actividad">
           <router-link to="/catalogo" @click="closeMenu()"><AccountMenuIcon name="search" />Explorar objetos</router-link>
@@ -151,6 +156,7 @@ function handleLogout() {
 .account-menu__shortcuts { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 8px 14px; }
 .account-menu__shortcuts a { display:flex;align-items:center;gap:9px;padding:14px 12px;min-height:52px;background:var(--surface-soft);border-radius:10px;color:var(--ink);text-decoration:none;font-size:13px;font-weight:600;transition:background 150ms ease; }
 .account-menu__shortcuts svg { color:var(--navy);flex-shrink:0; }
+.account-menu__message-dot { display:inline-block;flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:var(--navy);box-shadow:0 0 0 2px var(--surface-soft);margin-left:auto; }
 .account-menu__activity { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;padding:8px 4px 12px;border-top:1px solid var(--line); }
 .account-menu__activity a { display:flex;align-items:center;gap:9px;padding:10px 8px;min-height:44px;color:var(--ink);text-decoration:none;font-size:12px;line-height:1.4;border-radius:8px;transition:background 150ms ease; }
 .account-menu__activity svg { flex-shrink:0;color:var(--ink-soft);width:17px;height:17px; }

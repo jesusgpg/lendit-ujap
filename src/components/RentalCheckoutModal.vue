@@ -3,44 +3,43 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { push } from 'notivue'
 import LoadingState from './LoadingState.vue'
 import { usePaymentsStore } from '../stores/payments'
-import type { FakePaymentMethod, LoanRequest, PaymentRecord, SimulationOutcome } from '../types'
+import { removeUnreferencedPaymentProof, uploadPaymentProof } from '../lib/paymentProof'
+import VenezuelanBankField from './VenezuelanBankField.vue'
+import type { LoanRequest, PaymentRecord } from '../types'
 
-const props = defineProps<{
-  request: LoanRequest
-}>()
-
-const emit = defineEmits<{
-  (e: 'close'): void
-  (e: 'completed', payment: PaymentRecord): void
-}>()
-
+const props = defineProps<{ request: LoanRequest }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'completed', payment: PaymentRecord): void }>()
 const paymentsStore = usePaymentsStore()
 
 type ViewMode = 'form' | 'processing' | 'success' | 'failure'
-
+type PaymentMethod = 'wallet' | 'mobile'
 const viewMode = ref<ViewMode>('form')
-const selectedMethod = ref<FakePaymentMethod>('campus_balance')
-const selectedOutcome = ref<SimulationOutcome>('success')
+const selectedMethod = ref<PaymentMethod>('mobile')
 const paymentResult = ref<PaymentRecord | null>(null)
-const failureReason = ref<string>('')
+const failureReason = ref('')
 const modalRef = ref<HTMLElement | null>(null)
+const proofFile = ref<File | null>(null)
+const paymentForm = ref({ bank: '', phone: '', nationalId: '', reference: '' })
 
 const itemTitle = computed(() => props.request.item.title)
 const itemCode = computed(() => props.request.item.code)
 const categoryIcon = computed(() => props.request.item.categoryIcon || '📦')
 const ownerName = computed(() => props.request.item.owner.name || props.request.item.owner.email)
-
 const amount = computed(() => props.request.item.price ?? 0)
 const currency = computed(() => props.request.item.currency ?? 'USD')
-
-const formattedTotal = computed(() => {
-  return new Intl.NumberFormat('es-VE', {
-    style: 'currency',
-    currency: currency.value,
-    maximumFractionDigits: 2,
-  }).format(amount.value)
+const walletBalance = computed(() => paymentsStore.balanceFor(currency.value))
+const walletCanPay = computed(() => walletBalance.value >= amount.value)
+const selectedExchangeRate = computed(() => currency.value === 'USD' || currency.value === 'EUR'
+  ? paymentsStore.exchangeRates?.[currency.value] ?? null
+  : null)
+const transferAmountVES = computed(() => {
+  if (currency.value === 'VES') return Math.round((amount.value + Number.EPSILON) * 100) / 100
+  if (!selectedExchangeRate.value) return null
+  return Math.round((amount.value * selectedExchangeRate.value + Number.EPSILON) * 100) / 100
 })
-
+const formattedTotal = computed(() => new Intl.NumberFormat('es-VE', {
+  style: 'currency', currency: currency.value, maximumFractionDigits: 2,
+}).format(amount.value))
 const dateRangeDisplay = computed(() => {
   const date = new Intl.DateTimeFormat('es-VE', { dateStyle: 'medium' })
   const time = new Intl.DateTimeFormat('es-VE', { timeStyle: 'short' })
@@ -49,849 +48,155 @@ const dateRangeDisplay = computed(() => {
   return `${date.format(starts)} · ${time.format(starts)}–${time.format(ends)}`
 })
 
-function onKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    if (viewMode.value !== 'processing') {
-      emit('close')
-    }
-  }
+function selectProof(event: Event) {
+  const input = event.target as HTMLInputElement
+  proofFile.value = input.files?.[0] ?? null
+}
+
+function onKeyDown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && viewMode.value !== 'processing') emit('close')
 }
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
-  // Autofocus modal container for keyboard accessibility
   modalRef.value?.focus()
+  void paymentsStore.loadAccount().catch(() => undefined)
 })
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKeyDown)
-})
+onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 async function processCheckout() {
+  if (paymentsStore.isProcessing) return
   viewMode.value = 'processing'
   failureReason.value = ''
-
+  let proofPath: string | null = null
   try {
-    // Artificial brief pause to provide tactile user feedback for the simulated gateway
-    await new Promise((resolve) => setTimeout(resolve, 650))
-
-    const response = await paymentsStore.simulatePayment({
-      requestId: props.request.id,
-      outcome: selectedOutcome.value,
-      paymentMethod: selectedMethod.value,
-    })
-
-    if (response.simulatedFailure || response.payment.status === 'FAILED') {
-      viewMode.value = 'failure'
-      failureReason.value =
-        response.message ||
-        'Simulación de rechazo: Fondos demo insuficientes o bloqueo preventivo del emisor de pruebas.'
-      paymentResult.value = response.payment
-      emit('completed', response.payment)
+    let response
+    if (selectedMethod.value === 'wallet') {
+      response = await paymentsStore.submitWalletRental({ action: 'wallet-rental', requestId: props.request.id })
     } else {
-      viewMode.value = 'success'
-      paymentResult.value = response.payment
-      emit('completed', response.payment)
-      push.success({
-        title: 'Pago simulado completado',
-        message: 'Tu solicitud ya cuenta con el pago simulado registrado y está lista para aprobación.',
+      if (transferAmountVES.value === null) throw new Error('No hay una tasa BCV vigente disponible para convertir este pago. Inténtalo más tarde.')
+      if (!proofFile.value) throw new Error('Adjunta el comprobante de Pago Móvil para continuar.')
+      if (!paymentsStore.centralAccount) throw new Error('La cuenta central de LendIt no está configurada. No envíes un pago real.')
+      proofPath = await uploadPaymentProof(proofFile.value)
+      response = await paymentsStore.submitMobileRental({
+        action: 'mobile-rental',
+        requestId: props.request.id,
+        proofPath,
+        reference: paymentForm.value.reference,
+        bank: paymentForm.value.bank,
+        phone: paymentForm.value.phone,
+        nationalId: paymentForm.value.nationalId,
       })
+      proofPath = null
     }
+    paymentResult.value = response.payment
+    viewMode.value = 'success'
+    emit('completed', response.payment)
+    push.success({
+      title: 'Pago aprobado',
+      message: 'El propietario recibió una notificación y el importe se acreditó en su wallet.',
+    })
   } catch (error) {
+    if (proofPath) await removeUnreferencedPaymentProof(proofPath).catch(() => undefined)
     viewMode.value = 'failure'
-    failureReason.value =
-      error instanceof Error ? error.message : 'Error inesperado al contactar el servicio de simulación.'
+    failureReason.value = error instanceof Error ? error.message : 'No se pudo validar el pago. Inténtalo de nuevo.'
   }
 }
 
-function retryCheckout() {
-  viewMode.value = 'form'
-  selectedOutcome.value = 'success'
+function retryCheckout() { viewMode.value = 'form' }
+function finish() { emit('close') }
+function formatBalance(value: number) {
+  return new Intl.NumberFormat('es-VE', { style: 'currency', currency: currency.value, maximumFractionDigits: 2 }).format(value)
 }
-
-function finish() {
-  emit('close')
+function formatBolivares(value: number) {
+  return `Bs. ${new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`
+}
+function formatRate(value: number) {
+  return new Intl.NumberFormat('es-VE', { maximumFractionDigits: 8 }).format(value)
+}
+function formatRateDate(value: string | undefined) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat('es-VE', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00.000Z`))
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <div
-      class="checkout-backdrop"
-      @click.self="viewMode !== 'processing' && $emit('close')"
-    >
-      <div
-        ref="modalRef"
-        class="checkout-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="checkout-title"
-        tabindex="-1"
-      >
-        <!-- Header -->
+    <div class="checkout-backdrop" @click.self="viewMode !== 'processing' && $emit('close')">
+      <section ref="modalRef" class="checkout-dialog" role="dialog" aria-modal="true" aria-labelledby="checkout-title" tabindex="-1">
         <header class="checkout-header">
-          <div class="checkout-header__title">
-            <span class="checkout-badge">Simulación académica</span>
-            <h2 id="checkout-title">
-              {{
-                viewMode === 'success'
-                  ? 'Pago simulado aprobado'
-                  : viewMode === 'failure'
-                    ? 'Simulación de pago no completada'
-                    : 'Checkout de alquiler'
-              }}
-            </h2>
-          </div>
-          <button
-            v-if="viewMode !== 'processing'"
-            class="checkout-close"
-            type="button"
-            aria-label="Cerrar modal de checkout"
-            @click="$emit('close')"
-          >
-            ×
-          </button>
+          <div><span class="checkout-eyebrow">Solicitud de alquiler</span><h2 id="checkout-title">{{ viewMode === 'success' ? 'Pago aprobado' : viewMode === 'failure' ? 'No se pudo completar' : 'Completa el pago' }}</h2></div>
+          <button v-if="viewMode !== 'processing'" class="checkout-close" type="button" aria-label="Cerrar" @click="$emit('close')">×</button>
         </header>
 
-        <!-- Form view -->
         <div v-if="viewMode === 'form'" class="checkout-body">
-          <!-- Item & Pricing Summary -->
-          <section class="checkout-summary" aria-label="Resumen del alquiler">
-            <div class="checkout-summary__item">
-              <span class="checkout-summary__icon" aria-hidden="true">{{ categoryIcon }}</span>
-              <div class="checkout-summary__meta">
-                <span class="checkout-summary__code">{{ itemCode }}</span>
-                <strong>{{ itemTitle }}</strong>
-                <span>Propietario: {{ ownerName }}</span>
-                <span class="checkout-summary__date">{{ dateRangeDisplay }}</span>
-              </div>
-            </div>
-
-            <div class="checkout-pricing">
-              <div class="checkout-pricing__row">
-                <span>Tarifa de alquiler</span>
-                <strong>{{ formattedTotal }}</strong>
-              </div>
-              <div class="checkout-pricing__row checkout-pricing__row--free">
-                <span>Comisión de plataforma LendIt UJAP</span>
-                <strong>Gratis ($0.00)</strong>
-              </div>
-              <div class="checkout-pricing__row checkout-pricing__row--total">
-                <span>Total a debitar (Simulado)</span>
-                <strong class="checkout-pricing__amount">{{ formattedTotal }}</strong>
-              </div>
-            </div>
+          <section class="checkout-summary" aria-label="Resumen de la solicitud">
+            <div class="checkout-summary__item"><span class="checkout-summary__icon" aria-hidden="true">{{ categoryIcon }}</span><div><span class="checkout-summary__code">{{ itemCode }}</span><strong>{{ itemTitle }}</strong><span>Propietario: {{ ownerName }}</span><span>{{ dateRangeDisplay }}</span></div></div>
+            <div class="checkout-summary__total"><span>Total de la solicitud</span><strong>{{ formattedTotal }}</strong></div>
           </section>
 
-          <!-- Safe simulation alert -->
-          <aside class="checkout-notice" role="note">
-            <span class="checkout-notice__icon" aria-hidden="true">ℹ</span>
-            <div class="checkout-notice__content">
-              <strong>Entorno 100% de prueba académica</strong>
-              <p>
-                No se solicitan datos financieros reales ni se realizarán cobros a tus cuentas.
-                Esta transacción utiliza un saldo demo de la UJAP para registrar el estado
-                <code>SIMULATED_PAID</code>.
-              </p>
-            </div>
-          </aside>
+          <p class="checkout-note">Validación académica: no se realiza un cobro bancario real.</p>
 
-          <!-- Fake Payment Method Selection -->
-          <fieldset class="checkout-fieldset">
-            <legend class="checkout-legend">Método de pago simulado</legend>
-            <div class="checkout-options" role="radiogroup">
-              <label
-                class="checkout-option"
-                :class="{ 'checkout-option--active': selectedMethod === 'campus_balance' }"
-              >
-                <input
-                  v-model="selectedMethod"
-                  type="radio"
-                  name="fakeMethod"
-                  value="campus_balance"
-                />
-                <span class="checkout-option__icon">🎓</span>
-                <div class="checkout-option__details">
-                  <strong>Saldo demo campus UJAP</strong>
-                  <span>Saldo virtual disponible: {{ currency }} 150.00</span>
-                </div>
-                <span class="checkout-tag">Recomendado</span>
-              </label>
-
-              <label
-                class="checkout-option"
-                :class="{ 'checkout-option--active': selectedMethod === 'fake_card' }"
-              >
-                <input
-                  v-model="selectedMethod"
-                  type="radio"
-                  name="fakeMethod"
-                  value="fake_card"
-                />
-                <span class="checkout-option__icon">💳</span>
-                <div class="checkout-option__details">
-                  <strong>Tarjeta académica demo (4242)</strong>
-                  <span>•••• •••• •••• 4242 · Exp 12/28 · Estudiante UJAP</span>
-                </div>
-              </label>
-
-              <label
-                class="checkout-option"
-                :class="{ 'checkout-option--active': selectedMethod === 'fake_mobile_pay' }"
-              >
-                <input
-                  v-model="selectedMethod"
-                  type="radio"
-                  name="fakeMethod"
-                  value="fake_mobile_pay"
-                />
-                <span class="checkout-option__icon">📱</span>
-                <div class="checkout-option__details">
-                  <strong>Pago Móvil simulado</strong>
-                  <span>0412-0000000 · V-00000000 · Banco Demo</span>
-                </div>
-              </label>
-            </div>
+          <fieldset class="checkout-methods">
+            <legend>¿Cómo quieres pagar?</legend>
+            <label class="checkout-method" :class="{ 'checkout-method--selected': selectedMethod === 'mobile' }">
+              <input v-model="selectedMethod" type="radio" name="payment-method" value="mobile" />
+              <span><strong>Pago Móvil</strong><small>Adjunta el comprobante y los datos de referencia.</small></span>
+            </label>
+            <label class="checkout-method" :class="{ 'checkout-method--selected': selectedMethod === 'wallet' }" :aria-disabled="!walletCanPay">
+              <input v-model="selectedMethod" type="radio" name="payment-method" value="wallet" :disabled="!walletCanPay" />
+              <span><strong>Wallet LendIt</strong><small>Disponible: {{ formatBalance(walletBalance) }}<template v-if="!walletCanPay"> · saldo insuficiente</template></small></span>
+            </label>
+            <RouterLink v-if="!walletCanPay" class="checkout-wallet-link" to="/cuenta/pagos" @click="$emit('close')">Recargar wallet</RouterLink>
           </fieldset>
 
-          <!-- Simulation Outcome Picker (Allows testing safe failure state) -->
-          <fieldset class="checkout-fieldset checkout-fieldset--outcomes">
-            <legend class="checkout-legend">Simular resultado de pasarela</legend>
-            <div class="checkout-outcome-grid">
-              <label
-                class="checkout-outcome-card"
-                :class="{ 'checkout-outcome-card--active': selectedOutcome === 'success' }"
-              >
-                <input
-                  v-model="selectedOutcome"
-                  type="radio"
-                  name="simulationOutcome"
-                  value="success"
-                />
-                <div class="checkout-outcome-card__body">
-                  <span class="checkout-outcome-card__badge checkout-outcome-card__badge--success">✓ Éxito</span>
-                  <strong>Aprobar pago simulado</strong>
-                  <p>Registra el pago con estado SIMULATED_PAID y habilita la aprobación del dueño.</p>
-                </div>
-              </label>
+          <template v-if="selectedMethod === 'mobile'">
+            <aside class="checkout-conversion" aria-live="polite">
+              <template v-if="transferAmountVES !== null">
+                <strong>Transferencia Pago Móvil: {{ formatBolivares(transferAmountVES) }}</strong>
+                <p v-if="currency === 'VES'">El precio ya está expresado en bolívares; no requiere conversión.</p>
+                <p v-else-if="selectedExchangeRate">1 {{ currency }} = Bs. {{ formatRate(selectedExchangeRate) }} · Tasa oficial BCV</p>
+              </template>
+              <p v-else-if="paymentsStore.isLoadingAccount" role="status">Consultando la tasa BCV vigente…</p>
+              <p v-else role="alert">La tasa BCV de {{ currency }} no está disponible. No puedes continuar con Pago Móvil hasta obtener una tasa vigente.</p>
+            </aside>
+            <section v-if="paymentsStore.centralAccount" class="checkout-recipient" aria-labelledby="recipient-title">
+              <h3 id="recipient-title">Cuenta central de LendIt</h3>
+              <dl><div><dt>Titular</dt><dd>{{ paymentsStore.centralAccount.holder }}</dd></div><div><dt>Banco</dt><dd>{{ paymentsStore.centralAccount.bank }}</dd></div><div><dt>Teléfono</dt><dd>{{ paymentsStore.centralAccount.phone }}</dd></div><div><dt>Cédula</dt><dd>{{ paymentsStore.centralAccount.nationalId }}</dd></div></dl>
+            </section>
+            <p v-else class="checkout-warning" role="alert">Los datos de la cuenta central aún no están configurados. No hagas una transferencia real.</p>
+            <fieldset class="checkout-payer">
+              <legend>Datos del Pago Móvil enviado</legend>
+              <p class="checkout-payer__note">Se usan para identificar esta transferencia y no se guardan en tu perfil.</p>
+              <VenezuelanBankField v-model="paymentForm.bank" label="Banco de origen" />
+              <div class="checkout-row"><label>Teléfono afiliado<input v-model.trim="paymentForm.phone" required type="tel" inputmode="tel" autocomplete="tel" placeholder="0412-1234567" /></label><label>Cédula del pagador<input v-model.trim="paymentForm.nationalId" required maxlength="12" placeholder="V-12345678" /></label></div>
+              <label>Número de referencia<input v-model.trim="paymentForm.reference" required minlength="4" maxlength="60" autocomplete="off" /></label>
+              <label class="checkout-upload">Comprobante de pago<input ref="proofInput" type="file" accept="image/jpeg,image/png,image/webp" required @change="selectProof" /><small>{{ proofFile?.name || 'JPG, PNG o WebP · máximo 5 MB' }}</small></label>
+            </fieldset>
+          </template>
 
-              <label
-                class="checkout-outcome-card"
-                :class="{ 'checkout-outcome-card--active': selectedOutcome === 'failure' }"
-              >
-                <input
-                  v-model="selectedOutcome"
-                  type="radio"
-                  name="simulationOutcome"
-                  value="failure"
-                />
-                <div class="checkout-outcome-card__body">
-                  <span class="checkout-outcome-card__badge checkout-outcome-card__badge--fail">⚠ Fallo seguro</span>
-                  <strong>Simular error / rechazo</strong>
-                  <p>Simula fondos demo insuficientes o rechazo temporal sin cancelar la solicitud.</p>
-                </div>
-              </label>
-            </div>
-          </fieldset>
-
-          <!-- Actions -->
-          <footer class="checkout-actions">
-            <button
-              class="btn btn--ghost"
-              type="button"
-              @click="$emit('close')"
-            >
-              Cancelar y volver
-            </button>
-            <button
-              class="btn btn--primary"
-              type="button"
-              @click="processCheckout"
-            >
-              {{ selectedOutcome === 'success' ? 'Confirmar pago simulado' : 'Ejecutar simulación con error' }}
-            </button>
-          </footer>
+          <p v-if="paymentsStore.error" class="checkout-error" role="alert">{{ paymentsStore.error }}</p>
+          <footer class="checkout-actions"><button class="btn" type="button" @click="$emit('close')">Cancelar</button><button class="btn btn--primary" type="button" :disabled="paymentsStore.isProcessing || (selectedMethod === 'mobile' && (!paymentsStore.centralAccount || transferAmountVES === null))" @click="processCheckout">{{ selectedMethod === 'wallet' ? 'Pagar con wallet' : 'Validar Pago Móvil' }}</button></footer>
         </div>
 
-        <!-- Processing State -->
-        <div v-else-if="viewMode === 'processing'" class="checkout-state" aria-live="polite">
-          <LoadingState label="Procesando pago simulado en entorno de pruebas…" />
-          <p class="checkout-state__hint">
-            Validando autorización de la solicitud y registrando referencia demo…
-          </p>
+        <div v-else-if="viewMode === 'processing'" class="checkout-state" aria-live="polite"><LoadingState label="Validando la operación…" /><p>Estamos registrando el resultado y actualizando las wallets.</p></div>
+
+        <div v-else-if="viewMode === 'success'" class="checkout-state checkout-state--success" role="status">
+          <span class="checkout-state__mark" aria-hidden="true">✓</span><h3>Pago aprobado</h3>
+          <p>Se aprobó <strong>{{ formattedTotal }}</strong> para <em>{{ itemTitle }}</em>. El propietario recibió una notificación y el saldo se acreditó en su wallet.</p>
+          <div v-if="paymentResult?.providerReference" class="checkout-receipt"><span>Referencia</span><code>{{ paymentResult.providerReference }}</code></div>
+          <p v-if="paymentResult?.transferAmountVES !== null && paymentResult?.transferAmountVES !== undefined" class="checkout-state__transfer">Equivalente registrado en Pago Móvil: <strong>{{ formatBolivares(paymentResult.transferAmountVES) }}</strong><template v-if="paymentResult.exchangeRate && paymentResult.exchangeRateDate"> · Tasa BCV {{ formatBolivares(paymentResult.exchangeRate) }} por {{ currency }} del {{ formatRateDate(paymentResult.exchangeRateDate) }}</template></p>
+          <p class="checkout-state__disclaimer">Esta aprobación pertenece al entorno académico de LendIt; no confirma una operación bancaria real.</p>
+          <footer class="checkout-actions checkout-actions--center"><button class="btn btn--primary" type="button" @click="finish">Ver mis solicitudes</button></footer>
         </div>
 
-        <!-- Success State -->
-        <div v-else-if="viewMode === 'success'" class="checkout-state checkout-state--success" aria-live="polite">
-          <div class="checkout-state__symbol" aria-hidden="true">✓</div>
-          <h3>¡Pago simulado registrado con éxito!</h3>
-          <p class="checkout-state__desc">
-            Se ha registrado el monto de <strong>{{ formattedTotal }}</strong> en modo de prueba.
-            Tu solicitud para <em>{{ itemTitle }}</em> ahora está lista para ser aprobada por su propietario.
-          </p>
-
-          <div v-if="paymentResult?.providerReference" class="checkout-receipt">
-            <span class="checkout-receipt__label">Referencia de simulación:</span>
-            <code class="checkout-receipt__code">{{ paymentResult.providerReference }}</code>
-          </div>
-
-          <footer class="checkout-actions checkout-actions--center">
-            <button class="btn btn--primary" type="button" @click="finish">
-              Ver en mis solicitudes
-            </button>
-          </footer>
-        </div>
-
-        <!-- Failure State (Safe Failure Mode) -->
-        <div v-else-if="viewMode === 'failure'" class="checkout-state checkout-state--failure" aria-live="polite">
-          <div class="checkout-state__symbol checkout-state__symbol--fail" aria-hidden="true">⚠</div>
-          <h3>Simulación: Pago no completado</h3>
-          <p class="checkout-state__desc">
-            {{ failureReason }}
-          </p>
-
-          <div class="checkout-failure-box">
-            <strong>Estado seguro de la solicitud:</strong>
-            <p>
-              Tu solicitud no ha sido cancelada. Permanece en tu bandeja con estado <code>PENDIENTE</code> y
-              pago marcado como <code>FALLIDO</code>. Puedes reintentar la simulación cuando desees.
-            </p>
-          </div>
-
-          <footer class="checkout-actions checkout-actions--center">
-            <button class="btn btn--ghost" type="button" @click="finish">
-              Volver a solicitudes
-            </button>
-            <button class="btn btn--primary" type="button" @click="retryCheckout">
-              Reintentar simulación
-            </button>
-          </footer>
-        </div>
-      </div>
+        <div v-else class="checkout-state" role="alert"><span class="checkout-state__mark checkout-state__mark--error" aria-hidden="true">!</span><h3>No se pudo completar el pago</h3><p>{{ failureReason }}</p><footer class="checkout-actions checkout-actions--center"><button class="btn" type="button" @click="finish">Volver</button><button class="btn btn--primary" type="button" @click="retryCheckout">Intentar de nuevo</button></footer></div>
+      </section>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.checkout-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 250;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: color-mix(in srgb, var(--navy) 65%, transparent);
-  backdrop-filter: blur(5px);
-  overflow-y: auto;
-}
-
-.checkout-dialog {
-  position: relative;
-  width: min(100%, 580px);
-  max-height: 92vh;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  border-radius: 20px;
-  background: var(--paper-2);
-  border: 1px solid var(--line-strong);
-  box-shadow: var(--shadow);
-  padding: 24px;
-  outline: none;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
-}
-
-@media (max-width: 600px) {
-  .checkout-dialog {
-    padding: 18px;
-    max-height: 95vh;
-  }
-}
-
-.checkout-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 20px;
-}
-
-.checkout-header__title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.checkout-badge {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--gold-bg);
-  color: var(--gold);
-  border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent);
-}
-
-.checkout-header h2 {
-  font-size: 24px;
-  line-height: 1.2;
-  color: var(--ink);
-}
-
-.checkout-close {
-  background: transparent;
-  border: none;
-  font-size: 26px;
-  line-height: 1;
-  color: var(--ink-faint);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 8px;
-  transition: color 0.15s ease, background 0.15s ease;
-}
-
-.checkout-close:hover {
-  color: var(--crimson);
-  background: var(--crimson-bg);
-}
-
-.checkout-body {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* Item & pricing summary */
-.checkout-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 14px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-}
-
-.checkout-summary__item {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-.checkout-summary__icon {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: var(--crimson-bg);
-  font-size: 22px;
-  flex-shrink: 0;
-}
-
-.checkout-summary__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
-.checkout-summary__code {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
-}
-
-.checkout-summary__meta strong {
-  font-family: var(--display);
-  font-size: 18px;
-  color: var(--ink);
-  line-height: 1.25;
-}
-
-.checkout-summary__meta span {
-  font-size: 13.5px;
-  color: var(--ink-soft);
-}
-
-.checkout-summary__date {
-  font-size: 12.5px !important;
-  color: var(--navy) !important;
-  font-weight: 500;
-}
-
-.checkout-pricing {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--line);
-}
-
-.checkout-pricing__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
-  color: var(--ink-soft);
-}
-
-.checkout-pricing__row--free strong {
-  color: #1b7340;
-  font-size: 13px;
-}
-
-.checkout-pricing__row--total {
-  padding-top: 6px;
-  border-top: 1px solid var(--line);
-  font-size: 15.5px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.checkout-pricing__amount {
-  font-family: var(--display);
-  font-size: 20px;
-  color: var(--crimson);
-}
-
-/* Notice */
-.checkout-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--navy-bg);
-  border: 1px solid color-mix(in srgb, var(--navy) 20%, transparent);
-}
-
-.checkout-notice__icon {
-  font-size: 18px;
-  line-height: 1.2;
-  color: var(--navy);
-  font-weight: 700;
-}
-
-.checkout-notice__content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.checkout-notice__content strong {
-  font-size: 13.5px;
-  color: var(--navy);
-}
-
-.checkout-notice__content p {
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-
-.checkout-notice__content code {
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: var(--paper);
-}
-
-/* Fieldset */
-.checkout-fieldset {
-  border: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.checkout-legend {
-  font-size: 13.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-faint);
-  margin-bottom: 6px;
-}
-
-.checkout-options {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.checkout-option {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--paper);
-  border: 1.5px solid var(--line);
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.checkout-option:hover {
-  border-color: var(--line-strong);
-}
-
-.checkout-option--active {
-  border-color: var(--crimson);
-  background: color-mix(in srgb, var(--crimson-bg) 25%, var(--paper));
-}
-
-.checkout-option input[type='radio'] {
-  accent-color: var(--crimson);
-  width: 17px;
-  height: 17px;
-  cursor: pointer;
-}
-
-.checkout-option__icon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.checkout-option__details {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-}
-
-.checkout-option__details strong {
-  font-size: 14.5px;
-  color: var(--ink);
-}
-
-.checkout-option__details span {
-  font-size: 12px;
-  color: var(--ink-soft);
-}
-
-.checkout-tag {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--gold-bg);
-  color: var(--gold);
-}
-
-/* Outcomes grid */
-.checkout-outcome-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-@media (max-width: 520px) {
-  .checkout-outcome-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.checkout-outcome-card {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 12px;
-  background: var(--paper);
-  border: 1.5px solid var(--line);
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.checkout-outcome-card:hover {
-  border-color: var(--line-strong);
-}
-
-.checkout-outcome-card--active {
-  border-color: var(--navy);
-  background: color-mix(in srgb, var(--navy-bg) 30%, var(--paper));
-}
-
-.checkout-outcome-card input[type='radio'] {
-  accent-color: var(--navy);
-  margin-top: 3px;
-  cursor: pointer;
-}
-
-.checkout-outcome-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.checkout-outcome-card__badge {
-  display: inline-block;
-  align-self: flex-start;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 6px;
-}
-
-.checkout-outcome-card__badge--success {
-  background: rgba(27, 115, 64, 0.12);
-  color: #1b7340;
-}
-
-.checkout-outcome-card__badge--fail {
-  background: rgba(200, 16, 46, 0.12);
-  color: var(--crimson);
-}
-
-.checkout-outcome-card__body strong {
-  font-size: 13.5px;
-  color: var(--ink);
-}
-
-.checkout-outcome-card__body p {
-  font-size: 11.5px;
-  color: var(--ink-soft);
-  line-height: 1.35;
-}
-
-/* Actions */
-.checkout-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
-.checkout-actions--center {
-  justify-content: center;
-  border-top: none;
-  padding-top: 12px;
-}
-
-@media (max-width: 480px) {
-  .checkout-actions {
-    flex-direction: column-reverse;
-  }
-  .checkout-actions .btn {
-    width: 100%;
-  }
-}
-
-/* State Views: Processing, Success, Failure */
-.checkout-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 16px;
-  padding: 30px 16px;
-}
-
-.checkout-state__hint {
-  font-size: 13px;
-  color: var(--ink-faint);
-}
-
-.checkout-state__symbol {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: rgba(27, 115, 64, 0.14);
-  color: #1b7340;
-  font-size: 32px;
-  font-weight: 700;
-}
-
-.checkout-state__symbol--fail {
-  background: var(--crimson-bg);
-  color: var(--crimson);
-}
-
-.checkout-state h3 {
-  font-size: 22px;
-  color: var(--ink);
-}
-
-.checkout-state__desc {
-  font-size: 14.5px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-  max-width: 440px;
-}
-
-.checkout-receipt {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 18px;
-  border-radius: 10px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-}
-
-.checkout-receipt__label {
-  font-size: 11.5px;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.checkout-receipt__code {
-  font-family: var(--mono);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--navy);
-}
-
-.checkout-failure-box {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 14px;
-  border-radius: 12px;
-  background: var(--paper);
-  border: 1px solid var(--line-strong);
-  text-align: left;
-  max-width: 440px;
-}
-
-.checkout-failure-box strong {
-  font-size: 13px;
-  color: var(--ink);
-}
-
-.checkout-failure-box p {
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-
-.checkout-failure-box code {
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: var(--paper-2);
-}
+.checkout-conversion{display:grid;gap:5px;padding:14px 16px;border:1px solid var(--navy);border-radius:10px;background:var(--navy-bg);color:var(--ink)}.checkout-conversion strong{font-size:15px;font-variant-numeric:tabular-nums}.checkout-conversion p{margin:0;color:var(--ink-soft);font-size:12px;line-height:1.55}.checkout-conversion a{color:var(--navy);font-weight:600}.checkout-state__transfer{padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--paper)}
+.checkout-backdrop{position:fixed;inset:0;z-index:250;display:grid;place-items:center;padding:16px;background:color-mix(in srgb,var(--navy) 65%,transparent);backdrop-filter:blur(5px);overflow-y:auto}.checkout-dialog{width:min(100%,600px);max-height:min(92vh,920px);display:flex;flex-direction:column;overflow-y:auto;border:1px solid var(--line-strong);border-radius:18px;background:var(--paper-2);box-shadow:var(--shadow);padding:24px;outline:none}.checkout-header{display:flex;justify-content:space-between;gap:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}.checkout-eyebrow{color:var(--gold);font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase}.checkout-header h2{margin:6px 0 0;font:500 26px/1.2 var(--display);color:var(--ink)}.checkout-close{width:40px;height:40px;border:1px solid var(--line);border-radius:50%;background:var(--paper);color:var(--ink);font-size:24px;cursor:pointer}.checkout-body{display:grid;gap:18px;padding-top:18px}.checkout-summary{display:grid;gap:15px;padding:16px;border:1px solid var(--line);border-radius:13px;background:var(--paper)}.checkout-summary__item{display:flex;gap:12px;align-items:flex-start}.checkout-summary__icon{display:grid;place-items:center;width:42px;height:42px;flex:none;border-radius:10px;background:var(--navy-bg);font-size:21px}.checkout-summary__item>div{display:grid;gap:4px;min-width:0}.checkout-summary__item strong{font:500 19px var(--display)}.checkout-summary__item span:not(.checkout-summary__code){font-size:12px;color:var(--ink-soft)}.checkout-summary__code{font:500 10px var(--mono);color:var(--ink-soft)}.checkout-summary__total{display:flex;justify-content:space-between;gap:10px;padding-top:13px;border-top:1px solid var(--line);font-size:13px}.checkout-summary__total strong{font-size:18px}.checkout-note,.checkout-warning{padding:12px 14px;border-radius:10px;background:var(--gold-bg);color:var(--ink);font-size:13px;line-height:1.55}.checkout-methods,.checkout-payer{display:grid;gap:11px;min-width:0;margin:0;padding:0;border:0}.checkout-methods legend,.checkout-payer legend{margin-bottom:6px;font-size:14px;font-weight:700}.checkout-method{display:flex;gap:12px;align-items:flex-start;padding:13px;border:1px solid var(--line);border-radius:11px;background:var(--paper);cursor:pointer}.checkout-method--selected{border-color:var(--navy);box-shadow:0 0 0 1px var(--navy)}.checkout-method[aria-disabled=true]{opacity:.64}.checkout-method input{margin-top:4px;accent-color:var(--navy)}.checkout-method span{display:grid;gap:4px}.checkout-method strong{font-size:14px}.checkout-method small{font-size:12px;color:var(--ink-soft)}.checkout-wallet-link{justify-self:end;color:var(--navy);font-size:13px}.checkout-recipient{padding:14px;border:1px solid var(--line);border-radius:11px;background:var(--paper)}.checkout-recipient h3{margin:0 0 12px;font:500 17px var(--display)}.checkout-recipient dl{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0}.checkout-recipient dl div{display:grid;gap:4px}.checkout-recipient dt{font-size:11px;color:var(--ink-soft)}.checkout-recipient dd{margin:0;font-size:13px;font-weight:600;overflow-wrap:anywhere}.checkout-payer{padding:14px;border:1px solid var(--line);border-radius:11px}.checkout-payer label{display:grid;gap:6px;font-size:12px;font-weight:600}.checkout-payer input:not([type=checkbox]):not([type=file]){box-sizing:border-box;width:100%;min-height:42px;padding:9px 11px;border:1px solid var(--line-strong);border-radius:8px;background:var(--paper);color:var(--ink);font:400 14px var(--sans)}.checkout-row{display:grid;grid-template-columns:1fr 1fr;gap:11px}.checkout-upload{padding:12px;border:1px dashed var(--line-strong);border-radius:9px;background:var(--paper-2)}.checkout-upload input{max-width:100%;font:400 12px var(--sans)}.checkout-upload small{font-size:11px;color:var(--ink-soft);overflow-wrap:anywhere}.checkout-remember input{accent-color:var(--navy)}.checkout-error{color:var(--crimson-dark);font-size:13px}.checkout-actions{display:flex;justify-content:flex-end;gap:10px;padding-top:15px;border-top:1px solid var(--line)}.checkout-state{display:grid;justify-items:center;gap:14px;text-align:center;padding:28px 8px 6px}.checkout-state>p{max-width:430px;margin:0;color:var(--ink-soft);font-size:14px;line-height:1.65}.checkout-state h3{margin:0;font:500 25px var(--display)}.checkout-state__mark{display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--navy-bg);color:var(--navy);font-size:25px}.checkout-state__mark--error{background:var(--crimson-bg);color:var(--crimson-dark)}.checkout-receipt{display:grid;gap:6px;padding:12px 16px;border:1px solid var(--line);border-radius:9px}.checkout-receipt span{font-size:11px;color:var(--ink-soft)}.checkout-receipt code{font:500 13px var(--mono)}.checkout-state__disclaimer{font-size:12px!important}.checkout-actions--center{width:100%;justify-content:center;margin-top:8px}.checkout-dialog :is(button,input,a):focus-visible{outline:2px solid var(--navy);outline-offset:3px}.checkout-payer__note{margin:0;color:var(--ink-soft);font-size:12px;line-height:1.5}@media(max-width:560px){.checkout-dialog{padding:18px;max-height:95vh}.checkout-actions{flex-direction:column-reverse}.checkout-actions .btn{width:100%}.checkout-row,.checkout-recipient dl{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){.checkout-dialog{scroll-behavior:auto}}
 </style>
