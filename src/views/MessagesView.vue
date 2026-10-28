@@ -45,9 +45,13 @@ async function openRoute() {
       return
     }
     const key = { kind: conversationId ? 'inquiry' as const : 'request' as const, id: (conversationId ?? requestId)! }
-    const existing = store.threads.find(thread => threadKey(thread) === threadKey(key))
+    const existing = requestId ? undefined : store.threads.find(thread => threadKey(thread) === threadKey(key))
     const thread = existing ?? (await apiRequest<{ thread: MessageThread }>(`/api/messages?${threadQuery(key)}`)).thread
     if (generation !== revision) return
+    if (requestId && thread.kind === 'inquiry') {
+      await router.replace({ name: 'messages', query: { conversation: thread.id } })
+      return
+    }
     selected.value = thread
     store.upsert(thread)
   } catch (error) { if (generation === revision) openError.value = messageError(error) }
@@ -79,7 +83,7 @@ onBeforeUnmount(() => { revision++; clearInterval(inboxTimer) })
           <div v-if="store.error" class="messages-state" role="alert"><p>{{ store.error }}</p><button type="button" @click="store.load()">Reintentar</button></div>
           <div v-else-if="!store.isLoading && !store.threads.length" class="messages-state"><strong>Tu próxima conversación empieza con un objeto.</strong><p>Usa “Preguntar al propietario” en el catálogo o “Conversar” en una solicitud.</p><router-link to="/catalogo">Buscar un objeto ↗</router-link></div>
           <p v-else-if="!filtered.length && !store.isLoading" class="messages-state">No hay coincidencias en las conversaciones cargadas.</p>
-          <ul v-if="filtered.length"><li v-for="thread in filtered" :key="threadKey(thread)"><button type="button" class="messages-thread" :class="{'is-selected':selected && threadKey(selected)===threadKey(thread)}" :aria-current="selected && threadKey(selected)===threadKey(thread) ? 'true' : undefined" @click="select(thread)"><img v-if="thread.item.photoUrl" :src="thread.item.photoUrl" alt="" loading="lazy" /><span v-else class="messages-initial" aria-hidden="true">{{ thread.item.title.charAt(0) }}</span><span class="messages-thread-info"><strong>{{ thread.counterpart.name }}</strong><span>{{ thread.item.title }}</span><span class="messages-preview">{{ thread.latestMessage ? `${thread.latestMessage.senderId === auth.user?.id ? 'Tú: ' : ''}${thread.latestMessage.content}` : 'Sin mensajes todavía' }}</span><span class="messages-context">{{ thread.kind === 'inquiry' ? 'Consulta' : 'Solicitud' }} · {{ shortDate(thread.updatedAt) }}</span></span></button></li></ul>
+          <ul v-if="filtered.length"><li v-for="thread in filtered" :key="threadKey(thread)"><button type="button" class="messages-thread" :class="{'is-selected':selected && threadKey(selected)===threadKey(thread)}" :aria-current="selected && threadKey(selected)===threadKey(thread) ? 'true' : undefined" @click="select(thread)"><img v-if="thread.item.photoUrl" :src="thread.item.photoUrl" alt="" loading="lazy" /><span v-else class="messages-initial" aria-hidden="true">{{ thread.item.title.charAt(0) }}</span><span class="messages-thread-info"><strong>{{ thread.counterpart.name }}</strong><span>{{ thread.item.title }}</span><span class="messages-preview">{{ thread.latestMessage ? `${thread.latestMessage.senderId === auth.user?.id ? 'Tú: ' : ''}${thread.latestMessage.content}` : 'Sin mensajes todavía' }}</span><span class="messages-context">Conversación · {{ shortDate(thread.updatedAt) }}</span></span></button></li></ul>
           <button v-if="store.hasMore" type="button" class="messages-more" :disabled="store.isLoading" @click="store.load(true)">{{ store.isLoading ? 'Cargando…' : 'Cargar más conversaciones' }}</button>
         </aside>
         <div class="messages-detail">

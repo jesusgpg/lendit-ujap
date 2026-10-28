@@ -12,6 +12,7 @@ import {
   type ApiResponse,
   type AuthenticatedProfile,
 } from './_lib/auth.js'
+import { addNotification } from './_lib/notifications.js'
 
 const mobilePaymentFields = z.object({
   proofPath: z.string().trim().min(1).max(255),
@@ -341,6 +342,13 @@ async function submitMobileRental(req: ApiRequest, res: ApiResponse, profile: Au
       type: 'RENTAL_CREDIT',
       description: `Alquiler: ${loanRequest.item.title}`,
     })
+    await addNotification(tx, {
+      userId: loanRequest.item.ownerId,
+      type: 'PAYMENT_RECEIVED',
+      title: 'Pago de alquiler recibido',
+      message: `El alquiler de «${loanRequest.item.title}» ya está pagado. Puedes revisar la solicitud.`,
+      href: '/solicitudes',
+    })
     return saved
   })
 
@@ -472,6 +480,13 @@ async function submitWalletRental(req: ApiRequest, res: ApiResponse, profile: Au
       currency: loanRequest.item.currency!,
       type: 'RENTAL_CREDIT',
       description: `Alquiler: ${loanRequest.item.title}`,
+    })
+    await addNotification(tx, {
+      userId: loanRequest.item.ownerId,
+      type: 'PAYMENT_RECEIVED',
+      title: 'Pago de alquiler recibido',
+      message: `El alquiler de «${loanRequest.item.title}» ya está pagado. Puedes revisar la solicitud.`,
+      href: '/solicitudes',
     })
     return saved
   })

@@ -11,7 +11,7 @@ function formatOffer(article: Article) {
 <template>
   <article class="loan-card">
     <div class="loan-card__visual">
-      <ItemPhotoGallery class="loan-card__gallery" :photo-urls="article.photoUrls" :photo-url="article.photoUrl" :title="article.title" :category-icon="article.category.slice(0, 1)" />
+      <ItemPhotoGallery class="loan-card__gallery" :photo-urls="article.photoUrls" :photo-url="article.photoUrl" :title="article.title" :category-icon="article.category.slice(0, 1)" zoomable />
       <span class="loan-card__status" :class="{ 'loan-card__status--lent': article.status !== 'available' }">{{ article.status === 'available' ? 'Disponible' : 'En préstamo' }}</span>
     </div>
     <div class="loan-card__body">

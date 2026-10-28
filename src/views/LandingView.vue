@@ -11,6 +11,8 @@ import SiteFooter from '../components/SiteFooter.vue'
 import ItemPhotoGallery from '../components/ItemPhotoGallery.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import RequestLoanForm from '../components/RequestLoanForm.vue'
+import RentalCheckoutModal from '../components/RentalCheckoutModal.vue'
+import type { LoanRequest } from '../types'
 
 const tagline = getAppTagline()
 const campusSrc = `${import.meta.env.BASE_URL}images/ujap_escultura.jpg`
@@ -20,6 +22,7 @@ const authStore = useAuthStore()
 const articlesStore = useArticlesStore()
 const route = useRoute()
 const router = useRouter()
+const selectedCheckoutRequest = ref<LoanRequest | null>(null)
 const search = ref('')
 const selectedArticle = ref<Article | null>(null)
 const matchingArticles = computed(() => {
@@ -93,6 +96,11 @@ function closeRequestForm() {
   selectedArticle.value = null
 }
 
+function handleRequestSubmitted(request: LoanRequest) {
+  closeRequestForm()
+  if (request?.item.mode === 'RENTAL') selectedCheckoutRequest.value = request
+}
+
 </script>
 
 <template>
@@ -149,7 +157,7 @@ function closeRequestForm() {
           <div v-else-if="isLoading" class="catalog-note" role="status">Cargando publicaciones del campus…</div>
           <TransitionGroup v-else-if="featuredArticles.length" name="listing" tag="div" class="landing-listings">
             <article v-for="article in featuredArticles" :key="article.id" class="landing-item-card">
-              <ItemPhotoGallery class="landing-item-card__gallery" :photo-urls="article.photoUrls" :photo-url="article.photoUrl" :title="article.title" :category-icon="article.category.slice(0, 1)" />
+              <ItemPhotoGallery class="landing-item-card__gallery" :photo-urls="article.photoUrls" :photo-url="article.photoUrl" :title="article.title" :category-icon="article.category.slice(0, 1)" zoomable />
               <div class="landing-item-card__body">
                 <div class="landing-item-card__meta"><span>{{ article.category }}</span><span class="landing-item-card__status">Disponible</span></div>
                 <h3>{{ article.title }}</h3>
@@ -173,8 +181,9 @@ function closeRequestForm() {
     </div>
 
     <ModalDialog v-if="selectedArticle" wide title="Solicitar objeto" @close="closeRequestForm">
-      <RequestLoanForm :article="selectedArticle" @submitted="closeRequestForm" />
+      <RequestLoanForm :article="selectedArticle" @submitted="handleRequestSubmitted" />
     </ModalDialog>
+    <RentalCheckoutModal v-if="selectedCheckoutRequest" :request="selectedCheckoutRequest" @close="selectedCheckoutRequest = null" />
   </div>
 </template>
 

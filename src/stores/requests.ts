@@ -41,6 +41,7 @@ export const useRequestsStore = defineStore('requests', {
         method: 'POST',
         body: JSON.stringify({ resource: 'request', ...input }),
       })
+      if (!response.request) throw new Error('REQUEST_NOT_CREATED')
       return response.request
     },
 
