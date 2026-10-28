@@ -68,9 +68,9 @@ const statusMeta = computed(() => {
       }
     default:
       return {
-        label: 'Borrador',
+        label: 'Falta enviar credencial',
         class: 'status--draft',
-        desc: 'Completa tus datos académicos y sube tu credencial para solicitar revisión.',
+        desc: 'Completa tus datos académicos y adjunta la credencial. Al enviarla, pasará a revisión administrativa.',
       }
   }
 })
@@ -240,7 +240,11 @@ async function doSubmit() {
               class="teacher-panel__preview-img"
             />
             <div v-else class="teacher-panel__empty-preview">
-              <span class="teacher-panel__doc-icon">🪪</span>
+              <svg class="teacher-panel__doc-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <circle cx="8" cy="11" r="2" />
+                <path d="M5.5 16c.6-1.2 1.4-1.8 2.5-1.8s1.9.6 2.5 1.8M13 10h5M13 14h5" />
+              </svg>
               <strong>Sin documento cargado</strong>
               <p>Selecciona una imagen clara de tu acreditación institucional.</p>
             </div>
@@ -298,7 +302,7 @@ async function doSubmit() {
               <time class="teacher-panel__history-time">{{ new Date(d.createdAt).toLocaleDateString('es-VE', { dateStyle: 'medium' }) }}</time>
             </div>
             <p v-if="d.reason" class="teacher-panel__history-reason">{{ d.reason }}</p>
-            <span class="teacher-panel__history-admin">Dictaminado por: {{ d.adminName }} (v{{ d.version }})</span>
+            <span class="teacher-panel__history-admin">Dictaminado por: {{ d.adminName }}</span>
           </li>
         </ul>
       </section>
@@ -336,22 +340,22 @@ async function doSubmit() {
 }
 
 .teacher-panel__tag {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--mono);
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--brand-gold, #c4820a);
+  color: var(--gold);
 }
 
 .teacher-panel__header h2 {
-  font-family: var(--font-heading, serif);
+  font-family: var(--display);
   font-size: 1.5rem;
   margin: 4px 0 6px;
-  color: var(--ink, #1f2937);
+  color: var(--ink);
 }
 
 .teacher-panel__header p {
-  color: var(--color-text-muted, #4b5563);
+  color: var(--ink-soft);
   font-size: 0.9375rem;
 }
 
@@ -362,7 +366,7 @@ async function doSubmit() {
   padding: 6px 14px;
   border-radius: 9999px;
   font-size: 0.8125rem;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--mono);
   border: 1px solid currentColor;
 }
 
@@ -373,10 +377,10 @@ async function doSubmit() {
   background: currentColor;
 }
 
-.status--draft { color: var(--color-text-muted, #6b7280); background: rgba(107, 114, 128, 0.08); }
-.status--pending { color: var(--brand-navy, #1e3a8a); background: rgba(30, 58, 138, 0.08); }
-.status--correction { color: #d97706; background: rgba(217, 119, 6, 0.08); }
-.status--rejected { color: var(--brand-crimson, #991b1b); background: rgba(153, 27, 27, 0.08); }
+.status--draft { color: var(--ink-faint); background: var(--paper-2); }
+.status--pending { color: var(--navy-2); background: var(--navy-bg); }
+.status--correction { color: var(--crimson-dark); background: var(--crimson-bg); }
+.status--rejected { color: var(--crimson-dark); background: var(--crimson-bg); }
 .status--approved { color: #15803d; background: rgba(21, 128, 61, 0.08); }
 
 .teacher-panel__alert {
@@ -411,9 +415,57 @@ async function doSubmit() {
 
 .teacher-panel__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.teacher-panel__form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.teacher-panel__form .field input,
+.teacher-panel__form .field select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background-color: var(--paper);
+  color: var(--ink);
+  font: 400 15px/1.4 var(--sans);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.teacher-panel__form .field input:hover:not(:disabled),
+.teacher-panel__form .field select:hover:not(:disabled) {
+  border-color: var(--ink-faint);
+}
+
+.teacher-panel__form .field input:focus-visible,
+.teacher-panel__form .field select:focus-visible {
+  border-color: var(--crimson);
+  outline: 2px solid var(--crimson);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--crimson-bg);
+}
+
+.teacher-panel__form .field input:disabled,
+.teacher-panel__form .field select:disabled {
+  background-color: var(--paper-2);
+  color: var(--ink-faint);
+  cursor: not-allowed;
 }
 
 .teacher-panel__fields {
@@ -471,9 +523,11 @@ async function doSubmit() {
 }
 
 .teacher-panel__doc-icon {
-  font-size: 2.5rem;
+  width: 38px;
+  height: 38px;
   display: block;
-  margin-bottom: 8px;
+  margin: 0 auto 10px;
+  color: var(--navy-2);
 }
 
 .teacher-panel__upload-actions {
@@ -590,5 +644,19 @@ async function doSubmit() {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   border: 0;
+}
+
+@media (max-width: 640px) {
+  .teacher-panel__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-panel__preview-box {
+    min-height: 180px;
+  }
+
+  .teacher-panel__footer .btn {
+    width: 100%;
+  }
 }
 </style>

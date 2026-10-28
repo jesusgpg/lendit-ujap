@@ -110,6 +110,17 @@ export interface TeacherVerification {
   signedUrl?: string | null
   status: TeacherVerificationStatus
   version: number
+  submittedVersion?: number | null
+  submittedAt?: string | null
+  submission?: {
+    id: string
+    version: number
+    documentPath: string
+    documentMime: string
+    documentBytes: number
+    documentSha256: string
+    submittedAt: string
+  } | null
   rejectionReason: string | null
   createdAt: string
   updatedAt: string

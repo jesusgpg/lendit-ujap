@@ -59,6 +59,10 @@ docs/*
 !docs/professor-implementation-brief.md
 !docs/professor-implementation-report.md
 !docs/teacher-verification-contract.md
+!docs/auth-functional-qa-brief.md
+!docs/auth-functional-qa-report.md
+!docs/api-reference.md
+!docs/auth-parallel-implementation-brief.md
 
 # Claude Code local settings
 .claude/

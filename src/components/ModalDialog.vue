@@ -97,42 +97,26 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding: 20px;
   background: color-mix(in srgb, var(--navy) 55%, transparent);
-  backdrop-filter: blur(4px);
 }
 
 .modal {
   width: min(100%, 380px);
   max-height: 90vh;
-  overflow-y: auto;
+  max-height: min(90dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
   border-radius: 20px;
   background: var(--paper-2);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   padding: 28px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
-}
-
-.modal::-webkit-scrollbar {
-  width: 8px;
-}
-
-.modal::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.modal::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
-  border-radius: 999px;
-}
-
-.modal::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--crimson) 55%, var(--line-strong));
 }
 
 .modal--wide {
-  width: 100%;
-  max-width: 540px;
+  width: min(100%, 1040px);
+  max-width: 1040px;
 }
 
 .modal__header {
@@ -140,10 +124,39 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20px;
+  flex: 0 0 auto;
 }
 
 .modal__header h2 {
+  margin: 0;
   font-size: 22px;
+  line-height: 1.2;
+}
+
+.modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.modal__body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal__body::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+
+.modal__body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--crimson) 55%, var(--line-strong));
 }
 
 .modal__close {
@@ -162,6 +175,11 @@ onBeforeUnmount(() => {
   color: var(--ink);
 }
 
+.modal__close:focus-visible {
+  outline: 2px solid var(--crimson);
+  outline-offset: 2px;
+}
+
 .modal-fade-enter-active,
 .modal-fade-leave-active {
   transition: opacity 0.2s ease;
@@ -170,5 +188,39 @@ onBeforeUnmount(() => {
 .modal-fade-enter-from,
 .modal-fade-leave-to {
   opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-fade-enter-active,
+  .modal-fade-leave-active {
+    transition-duration: 1ms;
+  }
+}
+
+@media (max-width: 520px) {
+  .modal-overlay {
+    padding: 8px;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - 16px);
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .modal--wide {
+    width: 100%;
+    max-width: none;
+  }
+
+  .modal__header {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .modal__header h2 {
+    font-size: 20px;
+  }
 }
 </style>

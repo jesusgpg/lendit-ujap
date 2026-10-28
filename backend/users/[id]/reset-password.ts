@@ -45,8 +45,10 @@ export default async function handler(req: ApiRequest & { query?: { id?: string 
     // Keep the serverless type-check independent of Supabase's inherited auth
     // declarations while calling the public method at runtime.
     const auth = supabase.auth as unknown as PasswordRecoveryAuthApi
+    const baseUrl = process.env.APP_URL || 'http://localhost:5173'
+    const resetRedirectUrl = new URL('/auth/reset-password', baseUrl).toString()
     const { error: resetError } = await auth.resetPasswordForEmail(targetUser.email, {
-      redirectTo: process.env.APP_URL,
+      redirectTo: resetRedirectUrl,
     })
     if (resetError) {
       return res.status(502).json({ ok: false, error: resetError.message })

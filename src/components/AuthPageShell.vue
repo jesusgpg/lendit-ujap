@@ -13,8 +13,9 @@ withDefaults(
     cardTitle: string
     cardLabel: string
     wideCard?: boolean
+    publicSession?: boolean
   }>(),
-  { wideCard: false },
+  { wideCard: false, publicSession: false },
 )
 
 const router = useRouter()
@@ -27,7 +28,7 @@ function goToLogin() {
 
 <template>
   <div class="auth-page" :class="{ 'auth-page--wide-card': wideCard }">
-    <SiteHeader show-marketplace-nav @open-login="goToLogin" />
+    <SiteHeader show-marketplace-nav :public-session="publicSession" @open-login="goToLogin" />
 
     <main id="main-content" class="auth-page__layout">
       <section class="auth-page__intro" aria-labelledby="auth-page-title">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useForm } from 'vee-validate'
 import { push } from 'notivue'
 import { useArticlesStore } from '../stores/articles'
@@ -28,6 +28,45 @@ const catalog = useCatalogStore()
 const restrictedToRoles = ref<string[]>(props.article?.restrictedToRoles ?? [])
 const publicationMode = ref<ItemMode>(props.article?.mode ?? 'LOAN')
 
+type DurationUnit = 'hours' | 'days' | 'weeks' | 'custom'
+
+function parseDuration(value: string): { amount: number; unit: DurationUnit; custom: string } {
+  const trimmed = value.trim()
+  if (!trimmed) return { amount: 1, unit: 'days', custom: '' }
+
+  const normalized = trimmed.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const match = normalized.match(/^(\d+)\s*(h|hora|horas|d|dia|dias|sem|semana|semanas)$/)
+  if (!match) return { amount: 1, unit: 'custom', custom: trimmed }
+
+  const amount = Number(match[1])
+  if (amount < 1) return { amount: 1, unit: 'custom', custom: trimmed }
+
+  const unit: DurationUnit = match[2].startsWith('h')
+    ? 'hours'
+    : match[2].startsWith('d')
+      ? 'days'
+      : 'weeks'
+  return { amount, unit, custom: '' }
+}
+
+function formatDuration(amount: number, unit: Exclude<DurationUnit, 'custom'>) {
+  const singular = amount === 1
+  if (unit === 'hours') return `${amount} ${singular ? 'hora' : 'horas'}`
+  if (unit === 'days') return `${amount} ${singular ? 'día' : 'días'}`
+  return `${amount} ${singular ? 'semana' : 'semanas'}`
+}
+
+const initialDuration = parseDuration(props.article?.duration ?? '')
+const durationAmount = ref<number | ''>(initialDuration.amount)
+const durationUnit = ref<DurationUnit>(initialDuration.unit)
+const customDuration = ref(initialDuration.custom)
+const durationPreview = computed(() => {
+  if (durationUnit.value === 'custom') return customDuration.value.trim()
+  const amount = Number(durationAmount.value)
+  if (!Number.isInteger(amount) || amount < 1) return ''
+  return formatDuration(amount, durationUnit.value)
+})
+
 function getInitialPhotos(): string[] {
   if (props.article?.photoUrls && props.article.photoUrls.length > 0) {
     return [...props.article.photoUrls]
@@ -42,7 +81,9 @@ const { defineField, errors, handleSubmit, isSubmitting, setFieldValue } = useFo
   initialValues: {
     title: props.article?.title ?? '',
     categoryKey: props.article?.categoryKey ?? '',
-    duration: props.article?.duration ?? '',
+    duration: initialDuration.unit === 'custom'
+      ? initialDuration.custom
+      : formatDuration(initialDuration.amount, initialDuration.unit),
     description: props.article?.description ?? '',
     price: props.article?.price?.toString() ?? '',
     currency: props.article?.currency ?? ('USD' as Currency),
@@ -58,10 +99,13 @@ const { defineField, errors, handleSubmit, isSubmitting, setFieldValue } = useFo
 })
 const [title, titleAttrs] = defineField('title')
 const [categoryKey, categoryKeyAttrs] = defineField('categoryKey')
-const [duration, durationAttrs] = defineField('duration')
 const [description, descriptionAttrs] = defineField('description')
 const [price, priceAttrs] = defineField('price')
 const [currency, currencyAttrs] = defineField('currency')
+
+watch([durationAmount, durationUnit, customDuration], () => {
+  setFieldValue('duration', durationPreview.value)
+}, { flush: 'sync' })
 
 onMounted(async () => {
   await catalog.initialize()
@@ -145,7 +189,10 @@ const onSubmit = handleSubmit(async (values) => {
 
     if (!props.article) {
       setFieldValue('title', '')
-      setFieldValue('duration', '')
+      durationAmount.value = 1
+      durationUnit.value = 'days'
+      customDuration.value = ''
+      setFieldValue('duration', '1 día')
       setFieldValue('description', '')
       setFieldValue('price', '')
       setFieldValue('currency', 'USD')
@@ -185,11 +232,53 @@ const onSubmit = handleSubmit(async (values) => {
       <span v-if="errors.categoryKey" class="field__error">{{ errors.categoryKey }}</span>
     </label>
 
-    <label class="field">
-      <span>Tiempo de préstamo</span>
-      <input v-model="duration" v-bind="durationAttrs" type="text" placeholder="Ej: 4 horas, 2 días" required />
-      <span v-if="errors.duration" class="field__error">{{ errors.duration }}</span>
-    </label>
+    <div class="field field--duration" role="group" aria-labelledby="duration-label">
+      <span id="duration-label">{{ publicationMode === 'LOAN' ? 'Tiempo de préstamo' : 'Duración del alquiler' }}</span>
+      <div class="duration-control" :class="{ 'duration-control--invalid': errors.duration }">
+        <input
+          v-if="durationUnit !== 'custom'"
+          id="duration-amount"
+          v-model.number="durationAmount"
+          type="number"
+          min="1"
+          step="1"
+          inputmode="numeric"
+          aria-label="Cantidad de tiempo"
+          :aria-invalid="Boolean(errors.duration)"
+          :aria-describedby="errors.duration ? 'duration-error' : 'duration-preview'"
+          required
+        />
+        <input
+          v-else
+          id="duration-custom"
+          v-model="customDuration"
+          type="text"
+          maxlength="80"
+          placeholder="Escribe el plazo acordado"
+          aria-label="Duración personalizada"
+          :aria-invalid="Boolean(errors.duration)"
+          :aria-describedby="errors.duration ? 'duration-error' : 'duration-preview'"
+          required
+        />
+        <select
+          id="duration-unit"
+          v-model="durationUnit"
+          aria-label="Unidad de tiempo"
+          :aria-invalid="Boolean(errors.duration)"
+          :aria-describedby="errors.duration ? 'duration-error' : 'duration-preview'"
+          required
+        >
+          <option value="hours">Horas</option>
+          <option value="days">Días</option>
+          <option value="weeks">Semanas</option>
+          <option value="custom">Otro plazo</option>
+        </select>
+      </div>
+      <small id="duration-preview" class="duration-preview" aria-live="polite">
+        {{ durationPreview ? `Se mostrará como «${durationPreview}».` : 'Indica una cantidad entera desde 1.' }}
+      </small>
+      <span v-if="errors.duration" id="duration-error" class="field__error">{{ errors.duration }}</span>
+    </div>
 
     <label class="field">
       <span>Descripción <small>(opcional)</small></span>
@@ -320,6 +409,58 @@ const onSubmit = handleSubmit(async (values) => {
   border-color: var(--crimson);
 }
 
+.duration-control {
+  display: grid;
+  grid-template-columns: minmax(74px, 0.4fr) minmax(0, 1fr);
+  min-height: 48px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--paper);
+  overflow: hidden;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.duration-control:focus-within {
+  border-color: var(--crimson);
+  box-shadow: 0 0 0 3px var(--crimson-bg);
+}
+
+.duration-control--invalid {
+  border-color: var(--crimson-dark);
+}
+
+.duration-control input,
+.duration-control select {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 13px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 500 15px/1.4 var(--sans);
+}
+
+.duration-control select {
+  border-left: 1px solid var(--line);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.duration-control input:focus,
+.duration-control select:focus {
+  box-shadow: none;
+}
+
+.duration-preview {
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -356,6 +497,15 @@ const onSubmit = handleSubmit(async (values) => {
 .mode-option--selected {
   border-color: color-mix(in srgb, var(--gold) 55%, var(--line));
   background: var(--gold-bg);
+}
+
+.mode-option input[type='radio'],
+.field__checkbox input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--crimson);
+  flex: 0 0 auto;
 }
 
 .mode-option span {

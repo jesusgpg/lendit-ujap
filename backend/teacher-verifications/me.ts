@@ -208,7 +208,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           where: { verificationId: current.id },
           orderBy: { version: 'desc' },
         })
-        const nextVersion = Math.max(current.version, latestSubmission?.version ?? 0) + 1
+        const nextSubmissionVersion = (latestSubmission?.version ?? 0) + 1
+        const nextRevisionVersion = current.version + 1
 
         const casUpdate = await tx.teacherVerification.updateMany({
           where: {
@@ -222,8 +223,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             careerId: careerId || null,
             documentPath,
             status: 'PENDING',
-            version: nextVersion,
-            submittedVersion: nextVersion,
+            version: nextRevisionVersion,
+            submittedVersion: nextSubmissionVersion,
             rejectionReason: null,
           },
         })
@@ -236,12 +237,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           where: {
             verificationId_version: {
               verificationId: current.id,
-              version: nextVersion,
+              version: nextSubmissionVersion,
             },
           },
           create: {
             verificationId: current.id,
-            version: nextVersion,
+            version: nextSubmissionVersion,
             schoolId,
             department: department || null,
             careerId: careerId || null,

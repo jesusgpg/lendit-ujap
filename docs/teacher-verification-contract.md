@@ -94,6 +94,7 @@ Obtiene la postulación del usuario actual, el historial de dictámenes y URL fi
     "id": "uuid",
     "status": "DRAFT | PENDING | NEEDS_CORRECTION | REJECTED | APPROVED",
     "version": 2,
+    "submittedVersion": 1,
     "schoolId": "uuid",
     "schoolName": "Facultad de Ingeniería",
     "department": "Cátedra de Algoritmos",
@@ -144,7 +145,8 @@ Crea o actualiza y envía la postulación a revisión (`PENDING`).
   - Validación de tipo y contenido: inspección binaria de magic bytes (JPEG, PNG o WebP) y límite de 5 MB. Si no es un formato válido, devuelve `400 INVALID_IMAGE_CONTENT`. Si supera 5 MB, devuelve `400 FILE_TOO_LARGE`.
   - Transición atómica y congelación:
     - Transiciona `status` a `PENDING`.
-    - Incrementa `version` y actualiza `submittedVersion`.
+    - Incrementa `version` (revisión interna para control de concurrencia).
+    - Incrementa `submittedVersion` según el historial de envíos, independientemente de los dictámenes administrativos.
     - Genera una instantánea inmutable en la tabla `TeacherCredentialSubmission` con `documentMime`, `documentBytes` y `documentSha256`.
 - **Errores:**
   - `400 INVALID_PAYLOAD` / `SCHOOL_NOT_FOUND` / `CAREER_NOT_FOUND` / `CAREER_SCHOOL_MISMATCH` / `INVALID_DOCUMENT_PATH` / `CREDENTIAL_DOCUMENT_NOT_FOUND` / `INVALID_IMAGE_CONTENT` / `FILE_TOO_LARGE`
@@ -160,11 +162,12 @@ Todos los endpoints administrativos requieren autenticación y permiso `teachers
 Listado paginado y filtrable de solicitudes de docentes.
 
 - **Query params:**
-  - `status`: `ALL | PENDING | NEEDS_CORRECTION | REJECTED | APPROVED | DRAFT` (default: `PENDING`)
+  - `status`: `ALL | PENDING | NEEDS_CORRECTION | REJECTED | APPROVED` (default: `PENDING`). `ALL` incluye todos los envíos, pero excluye `DRAFT` porque aún no fueron enviados a revisión.
   - `schoolId`: UUID (opcional)
   - `search`: Texto de búsqueda por nombre o correo (opcional)
   - `page`: Número de página (default: `1`)
   - `pageSize`: Elementos por página (default: `10`, máx: `50`)
+- `version` es una revisión interna para controlar concurrencia; `submittedVersion` identifica la instantánea inmutable de `TeacherCredentialSubmission` y no representa un dictamen administrativo.
 - **Respuesta 200 OK:**
 ```json
 {
@@ -185,6 +188,8 @@ Listado paginado y filtrable de solicitudes de docentes.
       "department": "Cátedra de Algoritmos",
       "status": "PENDING",
       "version": 1,
+      "submittedVersion": 1,
+      "submittedAt": "2026-10-25T10:00:00.000Z",
       "documentPath": "authUserId/credential.webp",
       "createdAt": "2026-10-25T10:00:00.000Z",
       "updatedAt": "2026-10-25T10:00:00.000Z"
@@ -225,6 +230,17 @@ Detalle completo de una solicitud, incluyendo URL firmada (300 s) y log de dict�
     "signedUrl": "https://...supabase.co/storage/v1/object/sign/teacher-credentials/...?token=...",
     "status": "PENDING",
     "version": 1,
+    "submittedVersion": 1,
+    "submittedAt": "2026-10-25T10:00:00.000Z",
+    "submission": {
+      "id": "uuid",
+      "version": 1,
+      "documentPath": "authUserId/credential.webp",
+      "documentMime": "image/webp",
+      "documentBytes": 284000,
+      "documentSha256": "...",
+      "submittedAt": "2026-10-25T10:00:00.000Z"
+    },
     "rejectionReason": null,
     "createdAt": "2026-10-25T10:00:00.000Z",
     "updatedAt": "2026-10-25T10:00:00.000Z",
@@ -241,7 +257,7 @@ Detalle completo de una solicitud, incluyendo URL firmada (300 s) y log de dict�
   }
 }
 ```
-- **Errores:** `404 NOT_FOUND`, `403 FORBIDDEN` (sin permiso `teachers.review`).
+- **Errores:** `400 INVALID_STATUS`, `404 NOT_FOUND`, `403 FORBIDDEN` (sin permiso `teachers.review`).
 
 ---
 
@@ -257,6 +273,7 @@ Emite un dictamen administrativo (`APPROVE`, `REJECT`, `REQUEST_CORRECTION`) de 
 }
 ```
 - **Comportamiento y Reglas:**
+  - Solo se aceptan dictámenes para solicitudes `PENDING`; los demás estados retornan `409 NOT_PENDING`.
   - Si `expectedVersion !== verification.version`, retorna `409 CONCURRENCY_CONFLICT` impidiendo colisiones entre administradores.
   - `action === 'REJECT'` o `action === 'REQUEST_CORRECTION'` exige `reason` no vacío (mínimo 5 caracteres).
   - En `APPROVE`:

@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getAppName } from '../data'
 import AccountMenu from './AccountMenu.vue'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** Navegación del producto para las pantallas de catálogo y publicaciones. */
     showMarketplaceNav?: boolean
+    publicSession?: boolean
   }>(),
-  { showMarketplaceNav: false },
+  { showMarketplaceNav: false, publicSession: false },
 )
 
 const emit = defineEmits<{
@@ -20,6 +21,8 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const authStore = useAuthStore()
+const showMemberUi = computed(() => authStore.isAuthenticated && !props.publicSession)
+const showAdminUi = computed(() => authStore.isAdmin && !props.publicSession)
 const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
 const appName = getAppName()
 const isMobileMenuOpen = ref(false)
@@ -40,37 +43,37 @@ function handleLoginClick() {
 </script>
 
 <template>
-  <header class="site-header" :class="{'site-header--member':authStore.isAuthenticated}">
+  <header class="site-header" :class="{'site-header--member':showMemberUi}">
     <div class="site-header__inner">
-      <router-link class="brand" :to="authStore.isAuthenticated ? authStore.isAdmin ? '/admin' : '/inicio' : '/'" @click="closeMobileMenu">
+      <router-link class="brand" :to="showMemberUi ? showAdminUi ? '/admin' : '/inicio' : '/'" @click="closeMobileMenu">
         <img class="brand__crest" :src="crestSrc" alt="Escudo Universidad José Antonio Páez" />
         <span class="brand__name">{{ appName }}</span>
       </router-link>
 
       <!-- Desktop Navigation -->
       <nav class="site-nav" aria-label="Navegación principal">
-        <router-link v-if="authStore.isAuthenticated && !authStore.isAdmin" to="/inicio">Mi inicio</router-link>
+        <router-link v-if="showMemberUi && !showAdminUi" to="/inicio">Mi inicio</router-link>
         <router-link v-if="!showMarketplaceNav" to="/catalogo">Explorar</router-link>
         <template v-if="showMarketplaceNav">
           <router-link to="/catalogo">Explorar</router-link>
-          <router-link v-if="authStore.isAuthenticated && !authStore.isAdmin" to="/publicar">Publicar</router-link>
-          <router-link v-if="authStore.isAuthenticated && !authStore.isAdmin" to="/mis-publicaciones">Mis publicaciones</router-link>
-          <router-link v-if="authStore.isAuthenticated && !authStore.isAdmin" to="/solicitudes">Solicitudes</router-link>
-          <router-link v-if="authStore.isAuthenticated && !authStore.isAdmin" to="/mensajes">Mensajes</router-link>
+          <router-link v-if="showMemberUi && !showAdminUi" to="/publicar">Publicar</router-link>
+          <router-link v-if="showMemberUi && !showAdminUi" to="/mis-publicaciones">Mis publicaciones</router-link>
+          <router-link v-if="showMemberUi && !showAdminUi" to="/solicitudes">Solicitudes</router-link>
+          <router-link v-if="showMemberUi && !showAdminUi" to="/mensajes">Mensajes</router-link>
         </template>
-        <template v-if="!authStore.isAuthenticated">
+        <template v-if="!showMemberUi">
           <router-link to="/como-funciona">Cómo funciona</router-link>
           <router-link to="/categorias">Categorías</router-link>
           <router-link to="/confianza">Confianza</router-link>
         </template>
-        <router-link v-if="authStore.isAdmin" to="/admin">
+        <router-link v-if="showAdminUi" to="/admin">
           Administración
         </router-link>
       </nav>
 
       <div class="site-header__actions">
-        <AccountMenu v-if="authStore.isAuthenticated" @logout="emit('logout')" @open="closeMobileMenu" />
-        <button v-else class="btn btn--primary btn--small" type="button" @click="handleLoginClick">Empezar</button>
+        <AccountMenu v-if="showMemberUi" @logout="emit('logout')" @open="closeMobileMenu" />
+        <button v-else-if="!props.publicSession" class="btn btn--primary btn--small" type="button" @click="handleLoginClick">Empezar</button>
 
         <!-- Botón menú hamburguesa para pantallas móviles -->
         <button
@@ -92,12 +95,12 @@ function handleLoginClick() {
     <transition name="mobile-menu-anim">
       <div v-if="isMobileMenuOpen" id="mobile-nav" class="mobile-nav" role="region" aria-label="Navegación móvil">
         <nav class="mobile-nav__links">
-          <router-link v-if="authStore.isAuthenticated && !authStore.isAdmin" to="/inicio" class="mobile-nav__link" @click="closeMobileMenu">Mi inicio</router-link>
+          <router-link v-if="showMemberUi && !showAdminUi" to="/inicio" class="mobile-nav__link" @click="closeMobileMenu">Mi inicio</router-link>
           <router-link to="/catalogo" class="mobile-nav__link" @click="closeMobileMenu">
             Explorar catálogo
           </router-link>
-          <template v-if="authStore.isAuthenticated && !authStore.isAdmin">
-            <router-link v-if="!authStore.isAdmin" to="/mensajes" class="mobile-nav__link" @click="closeMobileMenu">Mensajes</router-link>
+          <template v-if="showMemberUi && !showAdminUi">
+            <router-link v-if="!showAdminUi" to="/mensajes" class="mobile-nav__link" @click="closeMobileMenu">Mensajes</router-link>
             <router-link to="/publicar" class="mobile-nav__link" @click="closeMobileMenu">
               Publicar un objeto
             </router-link>
@@ -108,11 +111,11 @@ function handleLoginClick() {
               Solicitudes y préstamos
             </router-link>
           </template>
-            <router-link v-if="!authStore.isAdmin" to="/como-funciona" class="mobile-nav__link" @click="closeMobileMenu">Cómo funciona</router-link>
-            <router-link v-if="!authStore.isAdmin" to="/categorias" class="mobile-nav__link" @click="closeMobileMenu">Categorías</router-link>
-            <router-link v-if="!authStore.isAdmin" to="/confianza" class="mobile-nav__link" @click="closeMobileMenu">Confianza</router-link>
+            <router-link v-if="!showAdminUi" to="/como-funciona" class="mobile-nav__link" @click="closeMobileMenu">Cómo funciona</router-link>
+            <router-link v-if="!showAdminUi" to="/categorias" class="mobile-nav__link" @click="closeMobileMenu">Categorías</router-link>
+            <router-link v-if="!showAdminUi" to="/confianza" class="mobile-nav__link" @click="closeMobileMenu">Confianza</router-link>
           <router-link
-            v-if="authStore.isAdmin"
+            v-if="showAdminUi"
             class="mobile-nav__link"
             to="/admin"
             @click="closeMobileMenu"

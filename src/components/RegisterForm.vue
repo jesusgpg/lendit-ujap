@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { isEligibleCampusEmail } from '../lib/emailEligibility'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useForm } from 'vee-validate'
 import { push } from 'notivue'
-import { isInstitutionalEmail, useAuthStore } from '../stores/auth'
+import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
 import PhotoDropzone from './PhotoDropzone.vue'
 
@@ -19,6 +20,23 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const catalogError = ref('')
 const showPassword = ref(false)
+const requiresConfirmation = ref(false)
+const registeredEmail = ref('')
+const errorSummary = ref<HTMLElement | null>(null)
+const emailValidationFailed = ref(false)
+const invalidFieldLinks = ref<Array<{ label: string; id: string }>>([])
+
+const registerFieldTargets: Record<string, { label: string; id: string }> = {
+  firstName: { label: 'Nombre', id: 'register-first-name' },
+  lastName: { label: 'Apellido', id: 'register-last-name' },
+  email: { label: 'Correo institucional', id: 'register-email' },
+  password: { label: 'Contraseña', id: 'register-password' },
+  role: { label: 'Tipo de cuenta', id: 'register-role' },
+  schoolId: { label: 'Facultad o escuela', id: 'register-school' },
+  careerId: { label: 'Carrera', id: 'register-career' },
+  department: { label: 'Departamento o cátedra', id: 'register-department' },
+  phone: { label: 'Teléfono', id: 'register-phone' },
+}
 
 async function loadCatalog() {
   catalogError.value = ''
@@ -50,7 +68,7 @@ const { defineField, errors, handleSubmit, isSubmitting, setFieldValue, values }
   validationSchema: {
     firstName: (value: string) => value.trim().length >= 2 || 'Escribe tu nombre.',
     lastName: (value: string) => value.trim().length >= 2 || 'Escribe tu apellido.',
-    email: (value: string) => isInstitutionalEmail(value) || 'Usa tu correo institucional (@ujap.edu.ve).',
+    email: (value: string) => isEligibleCampusEmail(value) || 'Usa tu correo institucional (@ujap.edu.ve).',
     password: (value: string) => value.length >= 6 || 'La contraseña debe tener al menos 6 caracteres.',
     role: (value: string) => ['STUDENT', 'PROFESSOR'].includes(value) || 'Selecciona cómo te registras.',
     schoolId: (value: string) => values.role === 'STUDENT' || !!value || 'Selecciona tu facultad o escuela.',
@@ -101,9 +119,15 @@ function handlePhotoUpdate(dataUrl: string) {
 const onSubmit = handleSubmit(async (formValues) => {
   errorMessage.value = ''
   successMessage.value = ''
+  requiresConfirmation.value = false
+  emailValidationFailed.value = false
+  invalidFieldLinks.value = []
 
   if (!photoPreview.value) {
     errorMessage.value = 'Selecciona una foto de perfil.'
+    push.error({ title: 'Falta tu foto de perfil', message: errorMessage.value })
+    await nextTick()
+    errorSummary.value?.focus()
     return
   }
 
@@ -123,10 +147,14 @@ const onSubmit = handleSubmit(async (formValues) => {
   if (!result.ok) {
     errorMessage.value = result.error ?? 'No se pudo completar el registro.'
     push.error({ title: 'No se completó el registro', message: errorMessage.value })
+    await nextTick()
+    errorSummary.value?.focus()
     return
   }
 
   if (result.requiresEmailConfirmation) {
+    requiresConfirmation.value = true
+    registeredEmail.value = formValues.email
     successMessage.value =
       'Cuenta creada. Revisa tu correo institucional y confirma la cuenta antes de iniciar sesión.'
     push.info({
@@ -137,6 +165,23 @@ const onSubmit = handleSubmit(async (formValues) => {
   }
 
   emit('success')
+}, async ({ errors }) => {
+  const invalidNames = Object.keys(errors)
+  emailValidationFailed.value = invalidNames.includes('email') && Boolean(email.value.trim()) && !isEligibleCampusEmail(email.value)
+  invalidFieldLinks.value = invalidNames
+    .map((name) => registerFieldTargets[name])
+    .filter((field): field is { label: string; id: string } => Boolean(field))
+
+  errorMessage.value = emailValidationFailed.value
+    ? 'Para crear una cuenta debes usar un correo institucional @ujap.edu.ve. Los correos personales, como Gmail, no están habilitados.'
+    : 'Completa los campos señalados antes de crear tu cuenta.'
+
+  push.error({
+    title: emailValidationFailed.value ? 'Correo no permitido' : 'Revisa el formulario',
+    message: errorMessage.value,
+  })
+  await nextTick()
+  errorSummary.value?.focus()
 })
 
 </script>
@@ -145,16 +190,35 @@ const onSubmit = handleSubmit(async (formValues) => {
   <form class="auth-form auth-form--register" novalidate @submit="onSubmit">
     <p class="auth-form__hint">Crea tu carnet digital LendIt con tus datos de estudiante o profesor UJAP.</p>
 
+    <div
+      v-if="errorMessage"
+      ref="errorSummary"
+      class="auth-form__error"
+      role="alert"
+      tabindex="-1"
+      aria-labelledby="register-error-title"
+    >
+      <strong id="register-error-title">
+        {{ emailValidationFailed ? 'No se permite este correo' : 'No se pudo crear la cuenta' }}
+      </strong>
+      <p>{{ errorMessage }}</p>
+      <ul v-if="invalidFieldLinks.length" class="auth-form__error-links">
+        <li v-for="field in invalidFieldLinks" :key="field.id">
+          <a :href="`#${field.id}`">Revisar {{ field.label.toLowerCase() }}</a>
+        </li>
+      </ul>
+    </div>
+
     <div class="auth-form__row">
       <label class="field">
         <span>Nombre</span>
-        <input v-model="firstName" v-bind="firstNameAttrs" type="text" placeholder="María" autocomplete="given-name" required />
+        <input id="register-first-name" v-model="firstName" v-bind="firstNameAttrs" type="text" placeholder="María" autocomplete="given-name" required />
         <span v-if="errors.firstName" class="field__error">{{ errors.firstName }}</span>
       </label>
 
       <label class="field">
         <span>Apellido</span>
-        <input v-model="lastName" v-bind="lastNameAttrs" type="text" placeholder="Pérez" autocomplete="family-name" required />
+        <input id="register-last-name" v-model="lastName" v-bind="lastNameAttrs" type="text" placeholder="Pérez" autocomplete="family-name" required />
         <span v-if="errors.lastName" class="field__error">{{ errors.lastName }}</span>
       </label>
     </div>
@@ -162,6 +226,7 @@ const onSubmit = handleSubmit(async (formValues) => {
     <label class="field">
       <span>Correo institucional</span>
       <input
+        id="register-email"
         v-model="email"
         v-bind="emailAttrs"
         type="email"
@@ -176,6 +241,7 @@ const onSubmit = handleSubmit(async (formValues) => {
       <span>Contraseña</span>
       <div class="field__password-control">
         <input
+          id="register-password"
           v-model="password"
           v-bind="passwordAttrs"
           :type="showPassword ? 'text' : 'password'"
@@ -207,7 +273,7 @@ const onSubmit = handleSubmit(async (formValues) => {
     </label>
 
     <div class="auth-form__role-field">
-      <fieldset class="field field--role">
+      <fieldset id="register-role" class="field field--role" tabindex="-1">
         <legend>¿Cómo te registras?</legend>
         <label class="field__radio">
           <input v-model="role" type="radio" name="role" value="STUDENT" />
@@ -225,7 +291,7 @@ const onSubmit = handleSubmit(async (formValues) => {
     <template v-if="role === 'STUDENT'">
       <label class="field">
         <span>Carrera</span>
-        <select v-model="careerId" v-bind="careerIdAttrs" required :disabled="!catalog.careers.length">
+        <select id="register-career" v-model="careerId" v-bind="careerIdAttrs" required :disabled="!catalog.careers.length">
           <option value="" disabled>Selecciona tu carrera</option>
           <option v-for="c in catalog.careers" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
@@ -237,7 +303,7 @@ const onSubmit = handleSubmit(async (formValues) => {
     <template v-else>
       <label class="field">
         <span>Facultad o Escuela</span>
-        <select v-model="schoolId" v-bind="schoolIdAttrs" required :disabled="!catalog.schools.length">
+        <select id="register-school" v-model="schoolId" v-bind="schoolIdAttrs" required :disabled="!catalog.schools.length">
           <option value="" disabled>Selecciona tu facultad o escuela</option>
           <option v-for="s in catalog.schools" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
@@ -248,6 +314,7 @@ const onSubmit = handleSubmit(async (formValues) => {
         <span>Departamento o Cátedra (opcional)</span>
         <input
           v-model="department"
+          id="register-department"
           v-bind="departmentAttrs"
           type="text"
           placeholder="Ej. Algoritmos, Estructuras"
@@ -258,7 +325,7 @@ const onSubmit = handleSubmit(async (formValues) => {
 
       <label class="field">
         <span>Carrera de adscripción (opcional)</span>
-        <select v-model="careerId" v-bind="careerIdAttrs">
+        <select id="register-career" v-model="careerId" v-bind="careerIdAttrs">
           <option value="">Todas / Sin carrera fija</option>
           <option v-for="c in availableCareers" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
@@ -266,8 +333,8 @@ const onSubmit = handleSubmit(async (formValues) => {
       </label>
 
       <div class="auth-form__teacher-notice">
-        <strong>Acreditación docente requerida:</strong>
-        Registrarte como profesor expresa tu solicitud. Tu cuenta se creará de forma segura y podrás subir tu carnet docente desde «Mi cuenta» para que la administración valide tu acreditación.
+        <strong>Acreditación docente requerida.</strong>
+        Tu registro inicia una postulación. Sube el carnet docente desde «Mi cuenta» para que administración revise tu acreditación. Mientras se aprueba, tu cuenta conserva los permisos de estudiante; al aprobarla se activa el rol de profesor.
       </div>
     </template>
 
@@ -278,19 +345,61 @@ const onSubmit = handleSubmit(async (formValues) => {
 
     <label class="field">
       <span>Teléfono de contacto</span>
-      <input v-model="phoneValue" v-bind="phoneAttrs" type="tel" placeholder="0414-1234567" autocomplete="tel" required />
+      <input id="register-phone" v-model="phoneValue" v-bind="phoneAttrs" type="tel" placeholder="0414-1234567" autocomplete="tel" required />
       <span v-if="errors.phone" class="field__error">{{ errors.phone }}</span>
     </label>
 
     <div class="field field--photo">
-      <span>Foto de perfil (obligatoria para el carnet)</span>
-      <PhotoDropzone :model-value="photoPreview" @update:model-value="handlePhotoUpdate" />
+      <span id="register-photo-label">Foto de perfil (obligatoria para el carnet)</span>
+      <PhotoDropzone
+        :model-value="photoPreview"
+        alt="Foto de perfil"
+        :aria-label="photoPreview ? 'Cambiar foto de perfil para el carnet' : 'Subir foto de perfil para el carnet'"
+        hint="JPG o PNG, hasta 5 MB. Se optimiza para el carnet institucional."
+        @update:model-value="handlePhotoUpdate"
+      />
+      <p id="photo-persistence-help" class="auth-form__photo-help">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </svg>
+        <span>
+          Tu foto se conservará temporalmente en este navegador mientras confirmas tu correo institucional para vincularla a tu carnet automáticamente.
+        </span>
+      </p>
     </div>
 
-    <p v-if="errorMessage" class="auth-form__error">{{ errorMessage }}</p>
-    <p v-if="successMessage" class="auth-form__success">{{ successMessage }}</p>
+    <!-- Estado accesible tras solicitar confirmación de correo -->
+    <div v-if="requiresConfirmation" class="auth-form__confirmation" role="status" aria-live="polite">
+      <div class="auth-form__confirmation-header">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        </svg>
+        <strong>¡Cuenta creada! Revisa tu correo institucional</strong>
+      </div>
+      <p class="auth-form__confirmation-text">
+        Hemos registrado tu cuenta con el correo <strong>{{ registeredEmail }}</strong>. Ingresa el código que enviamos para activarla.
+      </p>
+      <p class="auth-form__confirmation-subtext">
+        Tu foto de perfil está resguardada de forma segura en este navegador. Al confirmar e iniciar sesión se asociará a tu carnet digital LendIt.
+      </p>
+      <div class="auth-form__confirmation-links">
+        <router-link :to="{ path: '/auth/confirmacion', query: { email: registeredEmail } }" class="auth-form__link auth-form__link--resend">
+          Confirmar con el código o solicitar otro
+        </router-link>
+      </div>
+    </div>
 
-    <button class="btn btn--primary auth-form__submit" type="submit" :disabled="isSubmitting">
+    <p v-else-if="successMessage" class="auth-form__success">{{ successMessage }}</p>
+
+    <button
+      v-if="!requiresConfirmation"
+      class="btn btn--primary auth-form__submit"
+      type="submit"
+      :disabled="isSubmitting"
+    >
       {{ isSubmitting ? 'Creando cuenta…' : 'Crear mi cuenta' }}
     </button>
 
@@ -470,10 +579,94 @@ const onSubmit = handleSubmit(async (formValues) => {
   border-radius: 8px;
 }
 
+.auth-form__photo-help {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.auth-form__photo-help svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--navy);
+}
+
+.auth-form__confirmation {
+  background: var(--navy-bg);
+  border-left: 3px solid var(--navy-2);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.auth-form__confirmation-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--navy);
+}
+
+.auth-form__confirmation-header strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.auth-form__confirmation-text,
+.auth-form__confirmation-subtext {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.auth-form__confirmation-subtext {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.auth-form__confirmation-links {
+  margin-top: 4px;
+}
+
+.auth-form__link--resend {
+  display: inline-block;
+  font-size: 13px;
+}
+
 .auth-form__error {
   color: var(--crimson-dark);
   background: var(--crimson-bg);
   border-left: 3px solid var(--crimson-dark);
+}
+
+.auth-form__error:focus {
+  outline: 2px solid var(--crimson);
+  outline-offset: 2px;
+}
+
+.auth-form__error strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.auth-form__error-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.auth-form__error-links a {
+  color: var(--crimson-dark);
+  font-weight: 650;
+  text-underline-offset: 2px;
 }
 
 .field__error {

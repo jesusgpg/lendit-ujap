@@ -19,6 +19,9 @@ import PublishView from '../views/PublishView.vue'
 import MyPublicationsView from '../views/MyPublicationsView.vue'
 import RequestsView from '../views/RequestsView.vue'
 import AccountView from '../views/AccountView.vue'
+import RecoveryRequestView from '../views/RecoveryRequestView.vue'
+import ResetPasswordView from '../views/ResetPasswordView.vue'
+import EmailConfirmationView from '../views/EmailConfirmationView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,7 +30,7 @@ const router = createRouter({
     { path: '/', name: 'landing', component: LandingView },
     { path: '/inicio', name: 'student-home', component: StudentHomeView, meta: { requiresAuth: true } },
     { path: '/cuenta', redirect: '/cuenta/perfil' },
-    { path: '/cuenta/:section(perfil|carnet|acreditacion|preferencias)', name: 'account', component: AccountView, meta: { requiresAuth: true, allowAdmin: true } },
+    { path: '/cuenta/:section(perfil|carnet|acreditacion|preferencias|seguridad)', name: 'account', component: AccountView, meta: { requiresAuth: true, allowAdmin: true } },
     { path: '/mensajes', name: 'messages', component: MessagesView, meta: { requiresAuth: true } },
     { path: '/como-funciona', alias: '/comofunciona', name: 'how-it-works', component: CommunityInfoView, props: { section: 'how' } },
     { path: '/categorias', name: 'categories', component: CommunityInfoView, props: { section: 'categories' } },
@@ -43,6 +46,9 @@ const router = createRouter({
     { path: '/solicitudes', name: 'requests', component: RequestsView, meta: { requiresAuth: true } },
     { path: '/login', name: 'login', component: LoginView },
     { path: '/register', name: 'register', component: RegisterView },
+    { path: '/recuperar-contrasena', name: 'recovery-request', component: RecoveryRequestView },
+    { path: '/auth/reset-password', name: 'reset-password', component: ResetPasswordView },
+    { path: '/auth/confirmacion', name: 'email-confirmation', component: EmailConfirmationView },
     { path: '/admin/login', name: 'admin-login', component: AdminLoginView },
     { path: '/admin/acceso-denegado', name: 'admin-forbidden', component: AdminForbiddenView },
     {

@@ -6,18 +6,20 @@ import { useCatalogStore } from '../stores/catalog'
 import { apiRequest } from '../lib/api'
 import { uploadItemPhoto, removeItemPhoto } from '../lib/storage'
 import { fontSize, theme, colorblind, type FontSize } from '../lib/accessibility'
+import { memberRoleLabel } from '../lib/roleLabels'
 import SiteHeader from '../components/SiteHeader.vue'
 import SiteFooter from '../components/SiteFooter.vue'
 import PhotoDropzone from '../components/PhotoDropzone.vue'
 import AccountMenuIcon from '../components/AccountMenuIcon.vue'
 import StudentCardPanel from '../components/StudentCardPanel.vue'
 import TeacherCredentialPanel from '../components/TeacherCredentialPanel.vue'
+import AccountSecurityPanel from '../components/AccountSecurityPanel.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 
 const auth = useAuthStore()
 const catalog = useCatalogStore()
 const route = useRoute()
-const sections = computed<{ id: string; label: string; description: string; icon: 'profile' | 'objects' | 'accessibility' }[]>(() => [
+const sections = computed<{ id: string; label: string; description: string; icon: 'profile' | 'objects' | 'accessibility' | 'admin' }[]>(() => [
   { id: 'perfil', label: 'Perfil', description: 'Tus datos personales y académicos', icon: 'profile' },
   ...(!auth.isAdmin && (auth.user?.role === 'PROFESSOR' || !!auth.user?.teacherVerification)
     ? [{ id: 'acreditacion', label: 'Acreditación docente', description: 'Credencial y estado de validación', icon: 'objects' as const }]
@@ -25,15 +27,13 @@ const sections = computed<{ id: string; label: string; description: string; icon
   ...(!auth.isAdmin && auth.user?.role === 'STUDENT' && !auth.user?.teacherVerification
     ? [{ id: 'carnet', label: 'Carnet universitario', description: 'Tu documento privado del campus', icon: 'objects' as const }]
     : []),
+  { id: 'seguridad', label: 'Seguridad', description: 'Contraseña y protección de acceso', icon: 'admin' as const },
   { id: 'preferencias', label: 'Apariencia y accesibilidad', description: 'Tema, lectura e idioma', icon: 'accessibility' },
 ])
 const section = computed(() => sections.value.find(s => s.id === route.params.section) ?? sections.value[0]!)
 const roleLabel = computed(() => {
   if (auth.isAdmin) return 'Administración'
-  if (auth.user?.teacherVerification && auth.user.teacherVerification.status !== 'APPROVED') {
-    return 'Docente (En validación)'
-  }
-  return auth.user?.role === 'STUDENT' ? 'Estudiante' : auth.user?.role === 'PROFESSOR' ? 'Profesor' : 'Comunidad UJAP'
+  return memberRoleLabel(auth.user)
 })
 const form = ref({
   firstName: '',
@@ -175,6 +175,7 @@ onMounted(loadCareers)
           </template>
           <TeacherCredentialPanel v-else-if="section.id === 'acreditacion'" />
           <StudentCardPanel v-else-if="section.id === 'carnet'" />
+          <AccountSecurityPanel v-else-if="section.id === 'seguridad'" />
           <section v-else class="account-preferences" aria-labelledby="preferences-title">
             <header class="account-page__section-title"><h2 id="preferences-title">Apariencia y accesibilidad</h2><p>Los cambios se aplican y guardan automáticamente en este navegador.</p></header>
             <fieldset><legend>Tamaño del texto</legend><p>Elige una lectura cómoda para todas las pantallas.</p><div class="account-preferences__choices"><button v-for="(option, index) in fontOptions" :key="option.value" type="button" :aria-pressed="fontSize === option.value" @click="fontSize = option.value"><span :style="{ fontSize: `${18 + index * 5}px` }">{{ option.sample }}</span>{{ option.label }}</button></div></fieldset>

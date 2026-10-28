@@ -51,6 +51,10 @@ export default async function handler(
       submissions: {
         orderBy: { version: 'desc' },
         take: 10,
+        include: {
+          school: { select: { id: true, name: true } },
+          career: { select: { id: true, name: true } },
+        },
       },
       decisions: {
         orderBy: { createdAt: 'desc' },
@@ -67,8 +71,9 @@ export default async function handler(
 
   let signedUrl: string | null = null
   const token = extractBearerToken(req)
-  const currentSubmission = verification.submissions.find((s) => s.version === (verification.submittedVersion ?? verification.version))
+  const currentSubmission = verification.submissions.find((s) => s.version === verification.submittedVersion)
     ?? verification.submissions[0]
+  const submittedVersion = currentSubmission?.version ?? null
   const targetDocumentPath = currentSubmission?.documentPath ?? verification.documentPath
 
   if (targetDocumentPath && token) {
@@ -96,14 +101,15 @@ export default async function handler(
         photo: verification.user.photoUrl,
         currentRole: verification.user.role.name,
       },
-      school: verification.school,
-      career: verification.career,
+      school: currentSubmission?.school ?? verification.school,
+      career: currentSubmission?.career ?? verification.career,
       department: currentSubmission?.department ?? verification.department,
       documentPath: targetDocumentPath,
       signedUrl,
       status: verification.status,
       version: verification.version,
-      submittedVersion: verification.submittedVersion,
+      submittedVersion,
+      submittedAt: currentSubmission?.submittedAt.toISOString() ?? null,
       submission: currentSubmission ? {
         id: currentSubmission.id,
         version: currentSubmission.version,

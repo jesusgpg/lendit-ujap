@@ -2,6 +2,9 @@
 import 'dotenv/config'
 import app from './app.js'
 
+// This entry point is local-only; Vercel imports server/app directly.
+process.env.NODE_ENV ??= 'development'
+
 const port = Number(process.env.DEV_API_PORT ?? 8787)
 app.listen(port, () => {
   console.log('[dev-api] escuchando en http://localhost:' + port)

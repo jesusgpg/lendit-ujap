@@ -1,3 +1,4 @@
+import { isEligibleCampusEmail } from './emailPolicy.js'
 import { createClient, type AuthUser } from '@supabase/supabase-js'
 import { prisma } from './prisma.js'
 
@@ -170,7 +171,7 @@ export async function getAuthenticatedProfile(req: ApiRequest): Promise<
 
   const email = authentication.user.email?.trim()
   const permissions = profile.role.permissions.map((rp) => rp.permission.key)
-  if (!email || (!isInstitutionalEmail(email) && !isAdministrativeRole(profile.role.name, permissions))) {
+  if (!email || (!isEligibleCampusEmail(email) && !isAdministrativeRole(profile.role.name, permissions))) {
     return { profile: null, error: 'INSTITUTIONAL_EMAIL_REQUIRED' }
   }
 
