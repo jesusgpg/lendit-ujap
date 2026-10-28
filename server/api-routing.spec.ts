@@ -21,7 +21,7 @@ describe('single Vercel API entry point', () => {
   })
   afterAll(async () => { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) })
   it('routes the Vercel rewrite to health', async () => {
-    const response = await fetch(`${base}/api?__apiPath=health`)
+    const response = await fetch(`${base}/api?__apiPath=/health`)
     expect(await response.json()).toEqual({ ok: true })
   })
   it('also handles the original path when Vercel preserves it', async () => {

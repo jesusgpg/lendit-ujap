@@ -124,6 +124,8 @@ El proyecto incluye `vercel.json` para compilar Vite, servir `dist` y recargar r
 6. En Supabase Auth, establece la URL del sitio y las URLs de redirección con el dominio de Vercel o el dominio personalizado; `APP_URL` debe apuntar a ese mismo origen.
 7. Comprueba `/`, `/login`, `/register`, `/admin/login` y `/api/health` después del primer despliegue.
 
+Para comprobar el paquete serverless antes de publicarlo, ejecuta `vercel build --prod` y después `node scripts/qa-vercel-runtime.mjs`. Esta comprobación inicia el JavaScript emitido y verifica respuestas 401/404 sin conectar a servicios externos. Los imports del router compartido deben usar extensión `.js`: los imports `.ts` funcionan con `tsx` en desarrollo, pero fallan al arrancar el JavaScript compilado de Vercel. No publiques un build local con valores `[SENSITIVE]` descargados como placeholders; el despliegue remoto debe compilar con las variables reales configuradas en Vercel.
+
 ### Roles y permisos
 
 Los roles y permisos son datos, no un enum fijo: viven en las tablas `Role`, `Permission` y `RolePermission`. Un `ADMIN` puede crear roles nuevos y activar/desactivar permisos por rol desde el panel "Roles y permisos" que aparece en la landing al iniciar sesión como admin (requiere el permiso `roles.manage`).

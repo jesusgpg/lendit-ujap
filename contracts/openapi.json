@@ -1,0 +1,2430 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LendIt UJAP API",
+    "version": "1.0.0",
+    "description": "Inventario de rutas y esquemas iniciales derivado del backend. No es un contrato exhaustivo de DTOs ni evidencia de ejecución. Supabase Auth y Storage son servicios externos y no se inventan endpoints /api/login o /api/register."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8787",
+      "description": "Desarrollo local; ejecutar pnpm dev:api"
+    },
+    {
+      "url": "https://lendit-ujap.vercel.app",
+      "description": "Producción: no ejecutar mutaciones de demostración con cuentas personales"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Comprobar conexión PostgreSQL",
+        "description": "Público. 200 activo; 503 conexión caída. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_health",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Comprobar conexión PostgreSQL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Base de datos no disponible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "database": {
+                      "type": "string",
+                      "enum": [
+                        "down"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "database"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "summary": "Consultar perfil propio",
+        "description": "Sesión activa; 409 PROFILE_REQUIRED si no existe perfil. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_me",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consultar perfil propio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Actualizar o materializar perfil propio",
+        "description": "profile.update para perfil existente; validación académica por tipo de cuenta. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "patch__api_me",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfilePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Actualizar o materializar perfil propio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/items": {
+      "get": {
+        "summary": "Listar publicaciones o solicitudes propias",
+        "description": "Catálogo público; mine y view=requests requieren sesión. ADMIN solo lectura de catálogo. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_items",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "mine",
+            "description": "1 o true: publicaciones propias",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "view",
+            "description": "requests: solicitudes propias",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Listar publicaciones o solicitudes propias",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crear publicación o solicitud",
+        "description": "items.publish o items.rent según resource; ADMIN bloqueado. Docentes no aprobados no crean operaciones. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_items",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Publication"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RequestCreate"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Crear publicación o solicitud",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Editar publicación o resolver solicitud/préstamo",
+        "description": "Propietario o participante según acción; resource=request selecciona flujo de solicitudes. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "patch__api_items",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PublicationPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RequestAction"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Editar publicación o resolver solicitud/préstamo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Eliminar publicación sin historial",
+        "description": "items.publish y propiedad. 409 ITEM_HAS_LOAN_HISTORY si tiene solicitudes/préstamos. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "delete__api_items",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Eliminar publicación sin historial",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/schools": {
+      "get": {
+        "summary": "Listar schools",
+        "description": "Público. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_schools",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Listar schools",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crear schools",
+        "description": "careers.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_schools",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/School"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Crear schools",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/schools/{id}": {
+      "patch": {
+        "summary": "Editar schools",
+        "description": "careers.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "patch__api_schools_id_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchoolPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Editar schools",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Eliminar schools sin referencias bloqueantes",
+        "description": "careers.manage; 409 si está en uso. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "delete__api_schools_id_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eliminar schools sin referencias bloqueantes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/careers": {
+      "get": {
+        "summary": "Listar careers",
+        "description": "Público. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_careers",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Listar careers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crear careers",
+        "description": "careers.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_careers",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Career"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Crear careers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/careers/{id}": {
+      "patch": {
+        "summary": "Editar careers",
+        "description": "careers.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "patch__api_careers_id_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareerPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Editar careers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Eliminar careers sin referencias bloqueantes",
+        "description": "careers.manage; 409 si está en uso. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "delete__api_careers_id_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eliminar careers sin referencias bloqueantes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "summary": "Listar categories",
+        "description": "Público; action=photos requiere categories.manage y UNSPLASH_ACCESS_KEY. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_categories",
+        "security": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "action",
+            "description": "photos: búsqueda privada de fotos",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "description": "Término para búsqueda de fotos",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Listar categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crear categories",
+        "description": "categories.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_categories",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Category"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Crear categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/categories/{key}": {
+      "patch": {
+        "summary": "Editar categories",
+        "description": "categories.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "patch__api_categories_key_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Editar categories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Eliminar categories sin referencias bloqueantes",
+        "description": "categories.manage; 409 si está en uso. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "delete__api_categories_key_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eliminar categories sin referencias bloqueantes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles": {
+      "get": {
+        "summary": "Listar roles y permisos",
+        "description": "Sesión activa. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_roles",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Listar roles y permisos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Crear rol",
+        "description": "roles.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_roles",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Crear rol",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles/{id}": {
+      "patch": {
+        "summary": "Editar permisos/descripción de rol",
+        "description": "roles.manage; protección del último administrador. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "patch__api_roles_id_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RolePatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Editar permisos/descripción de rol",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Eliminar rol no protegido ni asignado",
+        "description": "roles.manage; ADMIN/STUDENT/PROFESSOR no se eliminan. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "delete__api_roles_id_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Eliminar rol no protegido ni asignado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/permissions": {
+      "get": {
+        "summary": "Listar permisos conocidos",
+        "description": "roles.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_permissions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Listar permisos conocidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "summary": "Buscar y paginar usuarios",
+        "description": "users.manage. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_users",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "description": "Búsqueda por nombre/correo",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "description": "Página desde 1; tamaño fijo 25",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Buscar y paginar usuarios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}": {
+      "patch": {
+        "summary": "Actualizar rol o estado activo",
+        "description": "users.manage; último admin protegido; asignar PROFESSOR requiere acreditación aprobada. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "patch__api_users_id_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Actualizar rol o estado activo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}/reset-password": {
+      "post": {
+        "summary": "Solicitar correo de recuperación para usuario",
+        "description": "users.manage. 200 significa solicitud aceptada, no entrega confirmada. Destino APP_URL + /auth/reset-password; requiere allowlist Supabase. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_users_id_reset_password",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Solicitar correo de recuperación para usuario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/messages": {
+      "get": {
+        "summary": "Consultar bandeja o mensajes de hilo",
+        "description": "Participantes; ADMIN bloqueado. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_messages",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "view",
+            "description": "inbox: bandeja",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "description": "Bandeja desde 0",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requestId",
+            "description": "UUID: hilo de solicitud, excluyente con conversationId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "conversationId",
+            "description": "UUID: consulta de objeto",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "description": "UUID del cursor en el mismo hilo",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consultar bandeja o mensajes de hilo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Iniciar consulta o enviar mensaje",
+        "description": "Participantes, audiencia y estado del hilo; ADMIN bloqueado. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_messages",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "start"
+                        ]
+                      },
+                      "itemId": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    },
+                    "required": [
+                      "action",
+                      "itemId"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "requestId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "conversationId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "content": {
+                        "type": "string",
+                        "maxLength": 2000,
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "content"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Iniciar consulta o enviar mensaje",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Iniciar consulta o enviar mensaje",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payments": {
+      "get": {
+        "summary": "Consultar pago simulado de solicitud",
+        "description": "Participantes de la solicitud; ADMIN bloqueado. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_payments",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "requestId",
+            "description": "UUID de solicitud",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consultar pago simulado de solicitud",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Simular resultado de pago",
+        "description": "Solo solicitante de alquiler pendiente; no procesa dinero real. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_payments",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentSimulation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Simular resultado de pago",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teacher-verifications/me": {
+      "get": {
+        "summary": "Consultar acreditación propia",
+        "description": "Cuenta activa; credencial privada e historial. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_teacher_verifications_me",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consultar acreditación propia",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Enviar/re-enviar acreditación",
+        "description": "Cuenta activa; archivo existente propio JPEG/PNG/WebP hasta 5 MB; expectedVersion para edición concurrente. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_teacher_verifications_me",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherSubmit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Enviar/re-enviar acreditación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teacher-verifications/me/credential": {
+      "get": {
+        "summary": "Obtener URL firmada de credencial propia",
+        "description": "Cuenta activa; URL temporal, no pública. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_teacher_verifications_me_credential",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Obtener URL firmada de credencial propia",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/teacher-verifications": {
+      "get": {
+        "summary": "Listar acreditaciones para revisión",
+        "description": "teachers.review. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_admin_teacher_verifications",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "description": "DRAFT/PENDING/NEEDS_CORRECTION/REJECTED/APPROVED/ALL; por defecto PENDING",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "schoolId",
+            "description": "UUID escuela",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "description": "Nombre/correo",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "description": "Desde 1",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "description": "1–50; por defecto 10",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Listar acreditaciones para revisión",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/teacher-verifications/{id}": {
+      "get": {
+        "summary": "Consultar expediente docente",
+        "description": "teachers.review. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "get__api_admin_teacher_verifications_id_",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consultar expediente docente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/teacher-verifications/{id}/decision": {
+      "post": {
+        "summary": "Aprobar, rechazar o pedir corrección",
+        "description": "teachers.review; expectedVersion obligatorio. Rechazo/corrección requieren motivo de al menos 5 caracteres. Ver docs/api-reference.md para reglas condicionales y ejemplos. Las respuestas de éxito documentan el sobre común; los DTO completos no se modelan todavía.",
+        "operationId": "post__api_admin_teacher_verifications_id_decision",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Identificador del recurso"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherDecision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aprobar, rechazar o pedir corrección",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error HTTP según validación, permisos, estado o proveedor. Consultar referencia humana; 401/403/404/409 no son intercambiables.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Success": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "error"
+        ]
+      },
+      "ProfilePatch": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 7
+          },
+          "photoUrl": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          },
+          "careerId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "schoolId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "department": {
+            "type": "string",
+            "maxLength": 120,
+            "nullable": true
+          }
+        }
+      },
+      "Publication": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 2
+          },
+          "categoryKey": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1
+          },
+          "duration": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "LOAN",
+              "RENTAL"
+            ],
+            "default": "LOAN"
+          },
+          "price": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "VES"
+            ]
+          },
+          "photoUrls": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "maxLength": 2048,
+              "format": "uri"
+            }
+          },
+          "photoUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "restrictedToRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "title",
+          "categoryKey",
+          "duration"
+        ]
+      },
+      "RequestCreate": {
+        "type": "object",
+        "properties": {
+          "resource": {
+            "type": "string",
+            "enum": [
+              "request"
+            ]
+          },
+          "itemId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 600
+          }
+        },
+        "required": [
+          "resource",
+          "itemId",
+          "startsAt",
+          "endsAt"
+        ]
+      },
+      "RequestAction": {
+        "type": "object",
+        "properties": {
+          "resource": {
+            "type": "string",
+            "enum": [
+              "request"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject",
+              "cancel",
+              "return"
+            ]
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "loanId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "resource",
+          "action"
+        ]
+      },
+      "UserPatch": {
+        "type": "object",
+        "properties": {
+          "roleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RoleCreate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 2
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "permissionKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "RolePatch": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "permissionKeys": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        }
+      },
+      "School": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2
+          },
+          "imagenUrl": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "uri",
+            "pattern": "^https://",
+            "nullable": true
+          },
+          "imagenAlt": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Career": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2
+          },
+          "schoolId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "imagenUrl": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "uri",
+            "pattern": "^https://",
+            "nullable": true
+          },
+          "imagenAlt": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 2
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 2
+          },
+          "icon": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "blurb": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "imagenUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "nullable": true
+          },
+          "imagenAlt": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 2
+          },
+          "unsplashPhotoId": {
+            "type": "string",
+            "maxLength": 100,
+            "nullable": true
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ]
+      },
+      "PaymentSimulation": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failure"
+            ],
+            "default": "success"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": [
+              "campus_balance",
+              "fake_card",
+              "fake_mobile_pay"
+            ],
+            "default": "campus_balance"
+          }
+        },
+        "required": [
+          "requestId"
+        ]
+      },
+      "TeacherSubmit": {
+        "type": "object",
+        "properties": {
+          "schoolId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "careerId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "department": {
+            "type": "string",
+            "maxLength": 120,
+            "nullable": true
+          },
+          "documentPath": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 3
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "schoolId",
+          "documentPath"
+        ]
+      },
+      "TeacherDecision": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT",
+              "REQUEST_CORRECTION"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "action",
+          "expectedVersion"
+        ]
+      },
+      "PublicationPatch": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 2
+          },
+          "categoryKey": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1
+          },
+          "duration": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "LOAN",
+              "RENTAL"
+            ],
+            "default": "LOAN"
+          },
+          "price": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "VES"
+            ]
+          },
+          "photoUrls": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "maxLength": 2048,
+              "format": "uri"
+            }
+          },
+          "photoUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "restrictedToRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "PAUSED"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "SchoolPatch": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2
+          },
+          "imagenUrl": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "uri",
+            "pattern": "^https://",
+            "nullable": true
+          },
+          "imagenAlt": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true
+          }
+        }
+      },
+      "CareerPatch": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 2
+          },
+          "schoolId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "imagenUrl": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "uri",
+            "pattern": "^https://",
+            "nullable": true
+          },
+          "imagenAlt": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true
+          }
+        }
+      },
+      "CategoryPatch": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 2
+          },
+          "icon": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "blurb": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "imagenUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://",
+            "nullable": true
+          },
+          "imagenAlt": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 2
+          },
+          "unsplashPhotoId": {
+            "type": "string",
+            "maxLength": 100,
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { memberRoleLabel } from '../lib/roleLabels'
 import AccountMenuIcon from './AccountMenuIcon.vue'
 
 const authStore = useAuthStore()
@@ -15,7 +16,7 @@ const menuPanel = ref<HTMLElement | null>(null)
 const menuTrigger = ref<HTMLButtonElement | null>(null)
 const menuId = useId()
 const keyboardOpening = ref(false)
-const roleLabel = computed(() => authStore.isAdmin ? 'Administración' : authStore.user?.role === 'PROFESSOR' ? 'Profesor' : authStore.user?.role === 'STUDENT' ? 'Estudiante' : 'Comunidad UJAP')
+const roleLabel = computed(() => authStore.isAdmin ? 'Administración' : memberRoleLabel(authStore.user))
 
 function closeMenu(restoreFocus = false) {
   isMenuOpen.value = false
@@ -146,7 +147,7 @@ function handleLogout() {
 .account-menu__identity-copy { display:flex;flex-direction:column;gap:4px;min-width:0;flex:1; }
 .account-menu__identity-copy strong { font-size:15px;line-height:1.4;overflow-wrap:anywhere; }
 .account-menu__identity-copy>span { font-size:12px;line-height:1.4;color:var(--ink-soft);overflow-wrap:anywhere; }
-.account-menu__identity-copy small { font-size:11px;line-height:1.4;color:var(--crimson-dark);font-weight:500; }
+.account-menu__identity-copy small { font-size:11px;line-height:1.4;color:var(--crimson-dark);font-weight:500;overflow-wrap:anywhere; }
 .account-menu__shortcuts { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 8px 14px; }
 .account-menu__shortcuts a { display:flex;align-items:center;gap:9px;padding:14px 12px;min-height:52px;background:var(--surface-soft);border-radius:10px;color:var(--ink);text-decoration:none;font-size:13px;font-weight:600;transition:background 150ms ease; }
 .account-menu__shortcuts svg { color:var(--navy);flex-shrink:0; }

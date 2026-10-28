@@ -1,8 +1,14 @@
+import { isEligibleCampusEmail } from '../lib/emailEligibility'
 import { defineStore } from 'pinia'
 import type { Session } from '@supabase/supabase-js'
 import { apiRequest } from '../lib/api'
 import { getSupabaseClient } from '../lib/supabase'
+import { verifyRecoverySession } from '../lib/authCallbacks'
 import { uploadItemPhoto } from '../lib/storage'
+import {
+  storePendingRegistrationPhoto,
+  restorePendingRegistrationPhoto,
+} from '../lib/pendingRegistrationPhoto'
 import { useMessagesStore } from './messages'
 import type { AuthUser, LoginCredentials, RegisterInput } from '../types'
 
@@ -15,8 +21,6 @@ interface AuthResult {
 interface ProfileResponse {
   user: AuthUser
 }
-
-let authListenerRegistered = false
 
 export function isInstitutionalEmail(email: string) {
   return /^[^\s@]+@ujap\.edu\.ve$/i.test(email.trim())
@@ -73,7 +77,7 @@ function validateCommonFields(input: RegisterInput) {
   if (input.role === 'PROFESSOR' && !input.schoolId) {
     return 'Selecciona tu facultad o escuela.'
   }
-  if (!isInstitutionalEmail(email)) {
+  if (!isEligibleCampusEmail(email)) {
     return 'Usa tu correo institucional (@ujap.edu.ve).'
   }
   if (input.password.length < 6) {
@@ -91,6 +95,10 @@ export const useAuthStore = defineStore('auth', {
     isLoading: false,
     isInitialized: false,
     initializationError: null as string | null,
+    isPasswordRecoveryActive: false,
+    passwordRecoveryUserId: null as string | null,
+    isResettingPassword: false,
+    authListenerRegistered: false,
   }),
 
   getters: {
@@ -118,24 +126,29 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         const supabase = getSupabaseClient()
-        const { data, error } = await supabase.auth.getSession()
-        if (error) {
-          throw error
-        }
-
-        if (data.session) {
-          await this.syncProfile(data.session)
-        }
-
-        if (!authListenerRegistered) {
+        if (!this.authListenerRegistered) {
           supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') {
               this.user = null
+              this.isPasswordRecoveryActive = false
+              this.passwordRecoveryUserId = null
               useMessagesStore().clear()
               return
             }
 
+            if (event === 'PASSWORD_RECOVERY') {
+              this.passwordRecoveryUserId = session?.user?.id ?? null
+              this.isPasswordRecoveryActive = Boolean(this.passwordRecoveryUserId)
+              return
+            }
+
             if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+              // Supabase may re-emit SIGNED_IN when the same browser session
+              // regains focus. Only a different identity cancels recovery here;
+              // leaving its route, signing out or saving also clears the state.
+              if (this.passwordRecoveryUserId && session?.user.id !== this.passwordRecoveryUserId) {
+                this.clearPasswordRecoveryState()
+              }
               globalThis.setTimeout(() => {
                 void this.syncProfile(session).catch((error: unknown) => {
                   this.initializationError = errorMessage(error, 'No se pudo cargar tu perfil.')
@@ -143,7 +156,15 @@ export const useAuthStore = defineStore('auth', {
               }, 0)
             }
           })
-          authListenerRegistered = true
+          this.authListenerRegistered = true
+        }
+        const { data, error } = await supabase.auth.getSession()
+        if (error) {
+          throw error
+        }
+
+        if (data.session) {
+          await this.syncProfile(data.session)
         }
       } catch (error) {
         this.user = null
@@ -181,6 +202,18 @@ export const useAuthStore = defineStore('auth', {
         })
         this.user = response.user
       }
+
+      // Integración con servicio de foto pendiente de Agente C
+      if (this.user && !this.user.photo) {
+        try {
+          const restoredUser = await restorePendingRegistrationPhoto(this.user.email, this.user)
+          if (restoredUser) {
+            this.user = restoredUser
+          }
+        } catch {
+          // Si el servicio no está disponible o falla, conserva el perfil actual
+        }
+      }
     },
 
     async register(input: RegisterInput): Promise<AuthResult> {
@@ -192,10 +225,16 @@ export const useAuthStore = defineStore('auth', {
       try {
         const supabase = getSupabaseClient()
         const email = input.email.trim().toLowerCase()
+        const redirectOrigin = typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : 'http://localhost:5173'
+        const emailRedirectTo = `${redirectOrigin.replace(/\/+$/, '')}/auth/confirmacion`
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password: input.password,
           options: {
+            emailRedirectTo,
             data: {
               firstName: input.firstName.trim(),
               lastName: input.lastName.trim(),
@@ -228,15 +267,177 @@ export const useAuthStore = defineStore('auth', {
           return { ok: true }
         }
 
+        // Si requiere confirmación de correo, guardar la foto pendiente vía Agente C
+        if (input.photo) {
+          try {
+            await storePendingRegistrationPhoto(email, input.photo)
+          } catch {
+            // No bloquea la creación de la cuenta si el almacenamiento local falla
+          }
+        }
+
         return { ok: true, requiresEmailConfirmation: true }
       } catch (error) {
         return { ok: false, error: errorMessage(error, 'No se pudo crear la cuenta.') }
       }
     },
 
+    async requestPasswordReset(email: string, mode: 'institutional' | 'admin' = 'institutional'): Promise<AuthResult> {
+      const normalizedEmail = email.trim().toLowerCase()
+      if (mode === 'institutional' && !isEligibleCampusEmail(normalizedEmail)) {
+        return { ok: false, error: 'Usa tu correo institucional (@ujap.edu.ve).' }
+      }
+      if (mode === 'admin' && !isValidEmail(normalizedEmail)) {
+        return { ok: false, error: 'Escribe un correo válido para el acceso administrativo.' }
+      }
+
+      try {
+        const origin = typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : 'http://localhost:5173'
+        const redirectTo = `${origin.replace(/\/+$/, '')}/auth/reset-password`
+
+        const { error } = await getSupabaseClient().auth.resetPasswordForEmail(normalizedEmail, {
+          redirectTo,
+        })
+
+        if (error) {
+          const msg = error.message.toLowerCase()
+          if (msg.includes('rate limit')) {
+            return { ok: false, error: 'Demasiadas solicitudes de recuperación. Espera un momento antes de volver a intentar.' }
+          }
+          return { ok: false, error: errorMessage(error, 'No se pudo procesar la solicitud de recuperación.') }
+        }
+
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, error: errorMessage(error, 'No se pudo procesar la solicitud de recuperación.') }
+      }
+    },
+
+    async updatePassword(newPassword: string): Promise<AuthResult> {
+      if (!this.isPasswordRecoveryActive || !this.passwordRecoveryUserId) {
+        return { ok: false, error: 'No tienes una sesión de recuperación de contraseña autorizada.' }
+      }
+
+      if (newPassword.length < 6) {
+        return { ok: false, error: 'La contraseña debe tener al menos 6 caracteres.' }
+      }
+
+      if (this.isResettingPassword) return { ok: false, error: 'Ya hay un cambio de contraseña en curso.' }
+      this.isResettingPassword = true
+
+      try {
+        const client = getSupabaseClient()
+        await verifyRecoverySession(client, this.passwordRecoveryUserId)
+        const { error } = await client.auth.updateUser({
+          password: newPassword,
+        })
+
+        if (error) {
+          return { ok: false, error: errorMessage(error, 'No se pudo actualizar la contraseña.') }
+        }
+
+        // Desactivar inmediatamente la autorización de recuperación (evita reenvíos o doble consumo)
+        this.clearPasswordRecoveryState()
+
+        // Cerrar la sesión de recuperación para forzar inicio de sesión limpio con la nueva clave
+        try {
+          await client.auth.signOut({ scope: 'local' })
+        } catch {
+          // Silencioso
+        }
+        this.user = null
+
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, error: errorMessage(error, 'No se pudo actualizar la contraseña.') }
+      } finally {
+        this.isResettingPassword = false
+      }
+    },
+
+    clearPasswordRecoveryState() {
+      this.isPasswordRecoveryActive = false
+      this.passwordRecoveryUserId = null
+    },
+
+    async confirmSignupWithCode(email: string, token: string): Promise<AuthResult> {
+      const normalizedEmail = email.trim().toLowerCase()
+      const normalizedToken = token.trim()
+
+      if (!isEligibleCampusEmail(normalizedEmail)) {
+        return { ok: false, error: 'Usa tu correo institucional (@ujap.edu.ve).' }
+      }
+      if (!normalizedToken) {
+        return { ok: false, error: 'Escribe el código que recibiste por correo.' }
+      }
+
+      try {
+        const { data, error } = await getSupabaseClient().auth.verifyOtp({
+          email: normalizedEmail,
+          token: normalizedToken,
+          type: 'email',
+        })
+
+        if (error) {
+          const message = error.message.toLowerCase()
+          if (message.includes('expired') || message.includes('otp_expired') || message.includes('not found')) {
+            return { ok: false, error: 'El código expiró o ya fue usado. Solicita uno nuevo.' }
+          }
+          if (message.includes('invalid') || message.includes('token')) {
+            return { ok: false, error: 'El código no coincide. Revísalo e inténtalo de nuevo.' }
+          }
+          return { ok: false, error: errorMessage(error, 'No se pudo confirmar el correo.') }
+        }
+
+        if (!data.session || !data.user?.email_confirmed_at) {
+          return { ok: false, error: 'No se pudo comprobar la confirmación. Solicita un código nuevo.' }
+        }
+
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, error: errorMessage(error, 'No se pudo confirmar el correo.') }
+      }
+    },
+
+    async resendConfirmationEmail(email: string): Promise<AuthResult> {
+      const normalizedEmail = email.trim().toLowerCase()
+      if (!isEligibleCampusEmail(normalizedEmail)) {
+        return { ok: false, error: 'Usa tu correo institucional (@ujap.edu.ve).' }
+      }
+
+      try {
+        const origin = typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : 'http://localhost:5173'
+        const emailRedirectTo = `${origin.replace(/\/+$/, '')}/auth/confirmacion`
+
+        const { error } = await getSupabaseClient().auth.resend({
+          type: 'signup',
+          email: normalizedEmail,
+          options: {
+            emailRedirectTo,
+          },
+        })
+
+        if (error) {
+          const msg = error.message.toLowerCase()
+          if (msg.includes('rate limit')) {
+            return { ok: false, error: 'Demasiadas solicitudes de reenvío. Espera unos minutos.' }
+          }
+          return { ok: false, error: errorMessage(error, 'No se pudo reenviar el correo de confirmación.') }
+        }
+
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, error: errorMessage(error, 'No se pudo reenviar el correo.') }
+      }
+    },
+
     async login({ email, password, mode = 'institutional' }: LoginCredentials): Promise<AuthResult> {
       const normalizedEmail = email.trim().toLowerCase()
-      if (mode === 'institutional' && !isInstitutionalEmail(normalizedEmail)) {
+      if (mode === 'institutional' && !isEligibleCampusEmail(normalizedEmail)) {
         return { ok: false, error: 'Usa tu correo institucional (@ujap.edu.ve).' }
       }
       if (mode === 'admin' && !isValidEmail(normalizedEmail)) {

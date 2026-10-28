@@ -1,3 +1,4 @@
+import { isEligibleCampusEmail } from './_lib/emailPolicy.js'
 import { z } from 'zod'
 import { prisma } from './_lib/prisma.js'
 import {
@@ -5,7 +6,6 @@ import {
   hasPermission,
   getAuthenticatedProfile,
   isAdministrativeRole,
-  isInstitutionalEmail,
   type ApiRequest,
   type ApiResponse,
 } from './_lib/auth.js'
@@ -137,7 +137,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const canUseAdministrativeEmail = existingProfile
     ? isAdministrativeRole(existingProfile.role.name, existingPermissions)
     : false
-  if (!email || (!isInstitutionalEmail(email) && !canUseAdministrativeEmail)) {
+  if (!email || (!isEligibleCampusEmail(email) && !canUseAdministrativeEmail)) {
     return res.status(403).json({ ok: false, error: 'INSTITUTIONAL_EMAIL_REQUIRED' })
   }
 

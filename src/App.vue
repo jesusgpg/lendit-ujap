@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { Notivue, NotivueSwipe, Notification, NotificationProgress, type NotivueTheme } from 'notivue'
+import { useMessageNotifications } from './composables/useMessageNotifications'
+
+useMessageNotifications()
 
 const lenditTheme: NotivueTheme = {
   '--nv-width': '360px',

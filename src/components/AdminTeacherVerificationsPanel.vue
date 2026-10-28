@@ -19,8 +19,9 @@ interface VerificationListItem {
   school: { id: string; name: string }
   career: { id: string; name: string } | null
   department: string | null
-  status: 'DRAFT' | 'PENDING' | 'NEEDS_CORRECTION' | 'REJECTED' | 'APPROVED'
+  status: 'PENDING' | 'NEEDS_CORRECTION' | 'REJECTED' | 'APPROVED'
   version: number
+  submittedAt: string | null
   documentPath: string | null
   createdAt: string
   updatedAt: string
@@ -57,6 +58,33 @@ const actionReason = ref('')
 const actionType = ref<'APPROVE' | 'REQUEST_CORRECTION' | 'REJECT' | null>(null)
 const submittingDecision = ref(false)
 const showImageZoom = ref(false)
+const credentialImageFailed = ref(false)
+
+function statusLabel(status: TeacherVerification['status']) {
+  switch (status) {
+    case 'PENDING': return 'Pendiente de revisión'
+    case 'NEEDS_CORRECTION': return 'Requiere corrección'
+    case 'REJECTED': return 'Rechazada'
+    case 'APPROVED': return 'Aprobada'
+    case 'DRAFT': return 'Sin enviar'
+  }
+  return 'Estado desconocido'
+}
+
+function decisionLabel(action: NonNullable<TeacherVerification['decisions']>[number]['action']) {
+  switch (action) {
+    case 'APPROVE': return 'Aprobó la acreditación'
+    case 'REQUEST_CORRECTION': return 'Solicitó correcciones'
+    case 'REJECT': return 'Rechazó la postulación'
+  }
+  return 'Dictamen registrado'
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('es-VE')
+}
 
 async function fetchList() {
   loading.value = true
@@ -100,6 +128,8 @@ async function openReview(id: string) {
   reviewError.value = ''
   actionType.value = null
   actionReason.value = ''
+  showImageZoom.value = false
+  credentialImageFailed.value = false
   try {
     const response = await apiRequest<{ ok: boolean; verification: TeacherVerification }>(`/api/admin/teacher-verifications/${id}`)
     activeReview.value = response.verification
@@ -116,10 +146,12 @@ function closeReview() {
   activeReview.value = null
   actionType.value = null
   actionReason.value = ''
+  showImageZoom.value = false
+  credentialImageFailed.value = false
 }
 
 async function submitDecision() {
-  if (!activeReview.value || !actionType.value) return
+  if (!activeReview.value || activeReview.value.status !== 'PENDING' || !actionType.value) return
 
   if (actionType.value !== 'APPROVE' && actionReason.value.trim().length < 5) {
     reviewError.value = 'Se requiere un motivo explicativo de al menos 5 caracteres.'
@@ -144,9 +176,13 @@ async function submitDecision() {
     closeReview()
     await fetchList()
   } catch (err) {
-    if (err instanceof Error && err.message.includes('CONCURRENCY_CONFLICT')) {
-      reviewError.value = 'Conflicto de concurrencia: la solicitud fue modificada por otro usuario o dictamen. Actualizando datos…'
-      await openReview(activeReview.value.id)
+    const serverMessage = err instanceof Error ? err.message : ''
+    if (activeReview.value && (serverMessage.includes('CONCURRENCY_CONFLICT') || serverMessage.includes('NOT_PENDING'))) {
+      const reviewId = activeReview.value.id
+      await openReview(reviewId)
+      reviewError.value = serverMessage.includes('NOT_PENDING')
+        ? 'Esta solicitud ya fue dictaminada por otra persona administradora. Actualizamos el detalle.'
+        : 'La solicitud cambió durante la revisión. Actualizamos el detalle antes de continuar.'
     } else {
       reviewError.value = err instanceof Error ? err.message : 'Error al registrar el dictamen.'
     }
@@ -165,13 +201,13 @@ onMounted(async () => {
   <div class="teacher-admin" aria-labelledby="teacher-admin-title">
     <div class="teacher-admin__header">
       <div>
-        <h2 id="teacher-admin-title" class="teacher-admin__title">Validaciones docentes</h2>
-        <p class="teacher-admin__subtitle">Revisa las credenciales del cuerpo académico para habilitar su participación como profesor.</p>
+        <h2 id="teacher-admin-title" class="teacher-admin__title">Postulaciones enviadas</h2>
+        <p class="teacher-admin__subtitle">Abre cada envío para revisar los datos y registrar un dictamen.</p>
       </div>
 
       <div class="teacher-admin__stats">
         <span class="teacher-admin__stat-count">{{ totalCount }}</span>
-        <span class="teacher-admin__stat-label">solicitudes</span>
+        <span class="teacher-admin__stat-label">envíos</span>
       </div>
     </div>
 
@@ -184,7 +220,7 @@ onMounted(async () => {
           <option value="NEEDS_CORRECTION">Requiere corrección</option>
           <option value="REJECTED">Rechazadas</option>
           <option value="APPROVED">Aprobadas</option>
-          <option value="ALL">Todas las solicitudes</option>
+          <option value="ALL">Todos los envíos</option>
         </select>
       </div>
 
@@ -209,6 +245,8 @@ onMounted(async () => {
       </div>
     </div>
 
+    <p class="teacher-admin__queue-note">La cola solo incluye postulaciones enviadas; los formularios aún sin enviar no aparecen aquí.</p>
+
     <div v-if="loading" class="teacher-admin__loading" role="status">
       Cargando solicitudes docentes…
     </div>
@@ -229,8 +267,7 @@ onMounted(async () => {
             <th scope="col">Docente</th>
             <th scope="col">Facultad y Cátedra</th>
             <th scope="col">Estado</th>
-            <th scope="col">Versión</th>
-            <th scope="col">Fecha</th>
+            <th scope="col">Fecha de envío</th>
             <th scope="col"><span class="sr-only">Acciones</span></th>
           </tr>
         </thead>
@@ -245,19 +282,16 @@ onMounted(async () => {
               <span v-if="item.department" class="teacher-admin__dept-name">{{ item.department }}</span>
             </td>
             <td>
-              <span class="badge" :class="`badge--${item.status.toLowerCase()}`">
-                {{ item.status === 'APPROVED' ? 'Aprobado' : item.status === 'PENDING' ? 'Pendiente' : item.status === 'NEEDS_CORRECTION' ? 'Corrección' : item.status === 'REJECTED' ? 'Rechazado' : 'Borrador' }}
-              </span>
+              <span class="badge" :class="`badge--${item.status.toLowerCase()}`">{{ statusLabel(item.status) }}</span>
             </td>
-            <td class="teacher-admin__version">v{{ item.version }}</td>
-            <td class="teacher-admin__date">{{ new Date(item.updatedAt).toLocaleDateString('es-VE') }}</td>
+            <td class="teacher-admin__date">{{ formatDate(item.submittedAt ?? item.updatedAt) }}</td>
             <td class="teacher-admin__actions">
               <button
                 type="button"
                 class="btn btn--secondary teacher-admin__btn-review"
                 @click="openReview(item.id)"
               >
-                Revisar
+                {{ item.status === 'PENDING' ? 'Revisar' : 'Ver detalle' }}
               </button>
             </td>
           </tr>
@@ -289,118 +323,153 @@ onMounted(async () => {
     <!-- Review Modal Dialog -->
     <ModalDialog
       v-if="activeReview"
-      :title="`Revisión docente — ${activeReview.user?.name ?? 'Solicitud'}`"
+      :wide="true"
+      :title="'Revisión de acreditación · ' + (activeReview.user?.name ?? 'Solicitud')"
       @close="closeReview"
     >
       <div class="review-modal">
-        <div class="review-modal__applicant-info">
-          <div>
-            <strong>{{ activeReview.user?.name }}</strong>
-            <p>{{ activeReview.user?.email }} · {{ activeReview.user?.phone }}</p>
-            <p class="review-modal__current-role">Rol actual: <span>{{ activeReview.user?.currentRole }}</span></p>
-          </div>
-          <div class="review-modal__meta">
-            <span class="badge" :class="`badge--${activeReview.status.toLowerCase()}`">
-              {{ activeReview.status }} (v{{ activeReview.version }})
-            </span>
-          </div>
-        </div>
-
-        <div class="review-modal__academic">
-          <p><strong>Facultad:</strong> {{ activeReview.school?.name }}</p>
-          <p v-if="activeReview.department"><strong>Departamento:</strong> {{ activeReview.department }}</p>
-          <p v-if="activeReview.career"><strong>Carrera:</strong> {{ activeReview.career.name }}</p>
-        </div>
-
-        <!-- Document Viewer -->
-        <div class="review-modal__doc-section">
-          <h4>Credencial presentada:</h4>
-          <div v-if="activeReview.signedUrl" class="review-modal__doc-preview">
-            <img
-              :src="activeReview.signedUrl"
-              alt="Credencial universitaria del docente"
-              class="review-modal__doc-img"
-              @click="showImageZoom = true"
-            />
-            <p class="review-modal__doc-hint">Clic en la imagen para ampliar.</p>
-          </div>
-          <div v-else class="review-modal__doc-missing">
-            Sin imagen disponible o enlace expirado.
-          </div>
-        </div>
-
-        <!-- Decision Form -->
-        <div class="review-modal__decision-box">
-          <h4>Dictamen administrativo:</h4>
-
-          <div class="review-modal__action-selector">
-            <label class="review-modal__radio">
-              <input v-model="actionType" type="radio" value="APPROVE" />
-              <span>Aprobar acreditación (Asigna rol Profesor)</span>
-            </label>
-            <label class="review-modal__radio">
-              <input v-model="actionType" type="radio" value="REQUEST_CORRECTION" />
-              <span>Solicitar corrección (Requiere motivo)</span>
-            </label>
-            <label class="review-modal__radio">
-              <input v-model="actionType" type="radio" value="REJECT" />
-              <span>Rechazar postulación (Requiere motivo)</span>
-            </label>
+        <section class="review-modal__column review-modal__context" aria-label="Datos de la postulación">
+          <div class="review-modal__applicant-info">
+            <div>
+              <p class="review-modal__eyebrow">Postulación docente</p>
+              <h3>{{ activeReview.user?.name }}</h3>
+              <p class="review-modal__contact">{{ activeReview.user?.email }} <span aria-hidden="true">·</span> {{ activeReview.user?.phone }}</p>
+              <p class="review-modal__current-role">Rol actual: <strong>{{ activeReview.user?.currentRole }}</strong></p>
+              <p v-if="activeReview.submittedAt" class="review-modal__submitted-at">Enviada el {{ formatDate(activeReview.submittedAt) }}</p>
+            </div>
+            <div class="review-modal__meta">
+              <span class="badge" :class="'badge--' + activeReview.status.toLowerCase()">{{ statusLabel(activeReview.status) }}</span>
+            </div>
           </div>
 
-          <div v-if="actionType === 'REQUEST_CORRECTION' || actionType === 'REJECT'" class="review-modal__reason-field">
-            <label for="review-reason">
-              <span>Motivo explicativo para el docente (obligatorio):</span>
-              <textarea
-                id="review-reason"
-                v-model="actionReason"
-                rows="3"
-                placeholder="Indica con claridad el motivo del rechazo o los ajustes necesarios en el documento…"
-                required
-                minlength="5"
-                maxlength="1000"
-              ></textarea>
-            </label>
+          <dl class="review-modal__academic">
+            <div>
+              <dt>Facultad</dt>
+              <dd>{{ activeReview.school?.name ?? 'Sin especificar' }}</dd>
+            </div>
+            <div v-if="activeReview.department">
+              <dt>Departamento o cátedra</dt>
+              <dd>{{ activeReview.department }}</dd>
+            </div>
+            <div v-if="activeReview.career">
+              <dt>Carrera</dt>
+              <dd>{{ activeReview.career.name }}</dd>
+            </div>
+          </dl>
+
+          <div class="review-modal__doc-section">
+            <div class="review-modal__section-heading">
+              <h3>Credencial presentada</h3>
+              <span v-if="activeReview.submission?.documentBytes" class="review-modal__doc-size">
+                {{ (activeReview.submission.documentBytes / 1024).toFixed(0) }} KB
+              </span>
+            </div>
+            <div v-if="activeReview.signedUrl && !credentialImageFailed" class="review-modal__doc-preview">
+              <button
+                class="review-modal__doc-trigger"
+                type="button"
+                aria-label="Ampliar credencial universitaria"
+                @click="showImageZoom = true"
+              >
+                <img
+                  :src="activeReview.signedUrl"
+                  alt="Credencial universitaria del docente"
+                  class="review-modal__doc-img"
+                  @error="credentialImageFailed = true"
+                />
+              </button>
+              <p class="review-modal__doc-hint">Selecciona la imagen para verla en grande.</p>
+            </div>
+            <div v-else class="review-modal__doc-missing" role="status">
+              No se pudo cargar la credencial. Cierra el detalle y vuelve a abrirlo para renovar el enlace.
+            </div>
+          </div>
+        </section>
+
+        <section class="review-modal__column review-modal__decision-column" aria-label="Dictamen administrativo">
+          <div v-if="activeReview.status === 'PENDING'" class="review-modal__decision-box">
+            <h3>Decisión de revisión</h3>
+            <p class="review-modal__decision-intro">Revisa los datos y la credencial antes de registrar un dictamen.</p>
+
+            <fieldset class="review-modal__action-selector">
+              <legend class="sr-only">Selecciona el dictamen</legend>
+              <label class="review-modal__radio">
+                <input v-model="actionType" type="radio" value="APPROVE" />
+                <span><strong>Aprobar acreditación</strong><small>Habilita el rol de profesor.</small></span>
+              </label>
+              <label class="review-modal__radio">
+                <input v-model="actionType" type="radio" value="REQUEST_CORRECTION" />
+                <span><strong>Solicitar correcciones</strong><small>La persona podrá corregir y volver a enviar.</small></span>
+              </label>
+              <label class="review-modal__radio">
+                <input v-model="actionType" type="radio" value="REJECT" />
+                <span><strong>Rechazar postulación</strong><small>Indica por qué no puede aprobarse.</small></span>
+              </label>
+            </fieldset>
+
+            <div v-if="actionType === 'REQUEST_CORRECTION' || actionType === 'REJECT'" class="review-modal__reason-field">
+              <label for="review-reason">Motivo para la persona docente
+                <textarea
+                  id="review-reason"
+                  v-model="actionReason"
+                  rows="4"
+                  placeholder="Explica con claridad qué debe corregir o por qué se rechaza la postulación."
+                  required
+                  minlength="5"
+                  maxlength="1000"
+                ></textarea>
+              </label>
+              <p class="review-modal__field-hint">Obligatorio, mínimo 5 caracteres.</p>
+            </div>
+
+            <div v-if="actionType === 'APPROVE'" class="review-modal__approve-notice">
+              Al aprobar, se asignará el rol de profesor y se guardará la adscripción académica indicada.
+            </div>
+          </div>
+          <div v-else class="review-modal__closed-state" role="status">
+            <h3>{{ statusLabel(activeReview.status) }}</h3>
+            <p v-if="activeReview.status === 'APPROVED'">Esta credencial ya fue aprobada. No se puede registrar otro dictamen para el mismo envío.</p>
+            <p v-else-if="activeReview.status === 'NEEDS_CORRECTION' || activeReview.status === 'REJECTED'">Este envío ya fue dictaminado. La postulación volverá a revisión cuando la persona docente envíe una nueva versión.</p>
+            <p v-else>Esta postulación todavía no tiene un envío pendiente de revisión.</p>
+            <p v-if="activeReview.rejectionReason" class="review-modal__closed-reason"><strong>Motivo registrado:</strong> {{ activeReview.rejectionReason }}</p>
           </div>
 
-          <div v-if="actionType === 'APPROVE'" class="review-modal__approve-notice">
-            Al aprobar, el usuario obtendrá de inmediato el rol <strong>PROFESSOR</strong> y se sincronizarán sus datos académicos de adscripción.
+          <p v-if="reviewError" class="review-modal__error" role="alert">{{ reviewError }}</p>
+
+          <div class="review-modal__actions">
+            <button type="button" class="btn" :disabled="submittingDecision" @click="closeReview">
+              Cerrar
+            </button>
+            <button
+              v-if="activeReview.status === 'PENDING'"
+              type="button"
+              class="btn btn--primary"
+              :disabled="!actionType || submittingDecision"
+              @click="submitDecision"
+            >
+              {{ submittingDecision ? 'Guardando dictamen…' : 'Registrar dictamen' }}
+            </button>
           </div>
-        </div>
+        </section>
 
-        <p v-if="reviewError" class="review-modal__error" role="alert">{{ reviewError }}</p>
-
-        <!-- Actions -->
-        <div class="review-modal__actions">
-          <button type="button" class="btn" :disabled="submittingDecision" @click="closeReview">
-            Cerrar
-          </button>
-          <button
-            type="button"
-            class="btn btn--primary"
-            :disabled="!actionType || submittingDecision"
-            @click="submitDecision"
-          >
-            {{ submittingDecision ? 'Procesando dictamen…' : 'Registrar dictamen' }}
-          </button>
-        </div>
-
-        <!-- History -->
-        <div v-if="activeReview.decisions && activeReview.decisions.length > 0" class="review-modal__history">
-          <h5>Historial de dictámenes previos:</h5>
-          <ul>
-            <li v-for="d in activeReview.decisions" :key="d.id">
-              <strong>{{ d.action }}</strong> — {{ new Date(d.createdAt).toLocaleDateString('es-VE') }} por {{ d.adminName }}
-              <p v-if="d.reason">«{{ d.reason }}»</p>
+        <section v-if="activeReview.decisions?.length" class="review-modal__history" aria-labelledby="review-history-title">
+          <h3 id="review-history-title">Historial de dictámenes</h3>
+          <ol>
+            <li v-for="decision in activeReview.decisions" :key="decision.id">
+              <div>
+                <strong>{{ decisionLabel(decision.action) }}</strong>
+                <span>{{ formatDate(decision.createdAt) }} · {{ decision.adminName }}</span>
+              </div>
+              <p v-if="decision.reason">{{ decision.reason }}</p>
             </li>
-          </ul>
-        </div>
+          </ol>
+        </section>
       </div>
     </ModalDialog>
-
     <!-- Zoom Image Modal -->
     <ModalDialog
-      v-if="showImageZoom && activeReview?.signedUrl"
+      v-if="showImageZoom && activeReview?.signedUrl && !credentialImageFailed"
+      :wide="true"
       title="Vista ampliada de credencial docente"
       @close="showImageZoom = false"
     >
@@ -427,14 +496,14 @@ onMounted(async () => {
 }
 
 .teacher-admin__title {
-  font-family: var(--font-heading, serif);
-  font-size: 1.625rem;
+  font-family: var(--display);
+  font-size: 1.5rem;
   margin: 0 0 6px;
-  color: var(--ink, #111827);
+  color: var(--ink);
 }
 
 .teacher-admin__subtitle {
-  color: var(--color-text-muted, #4b5563);
+  color: var(--ink-soft);
   font-size: 0.9375rem;
   margin: 0;
 }
@@ -446,17 +515,17 @@ onMounted(async () => {
 }
 
 .teacher-admin__stat-count {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--mono);
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--brand-navy, #1e3a8a);
+  color: var(--navy);
 }
 
 .teacher-admin__stat-label {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--ink-faint);
 }
 
 .teacher-admin__filters {
@@ -465,9 +534,15 @@ onMounted(async () => {
   align-items: center;
   flex-wrap: wrap;
   padding: 14px 18px;
-  background: var(--surface-raised, #ffffff);
-  border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: var(--radius-md, 8px);
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.teacher-admin__queue-note {
+  margin: -14px 0 0;
+  color: var(--ink-faint);
+  font-size: 0.8125rem;
 }
 
 .teacher-admin__filter-group {
@@ -479,17 +554,18 @@ onMounted(async () => {
 .teacher-admin__filter-label {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--color-text-muted, #4b5563);
+  color: var(--ink-soft);
 }
 
 .teacher-admin__select,
 .teacher-admin__search-input {
   padding: 6px 12px;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: var(--radius-sm, 6px);
+  min-height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
   font-size: 0.875rem;
-  background: var(--paper, #ffffff);
-  color: var(--ink, #111827);
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .teacher-admin__search {
@@ -498,9 +574,9 @@ onMounted(async () => {
 
 .teacher-admin__table-wrap {
   overflow-x: auto;
-  border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: var(--radius-md, 8px);
-  background: var(--surface-raised, #ffffff);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
 }
 
 .teacher-admin__table {
@@ -513,25 +589,25 @@ onMounted(async () => {
 .teacher-admin__table th,
 .teacher-admin__table td {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  border-bottom: 1px solid var(--line);
 }
 
 .teacher-admin__table th {
-  background: var(--color-surface, #f9fafb);
+  background: var(--paper-2);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--ink-faint);
 }
 
 .teacher-admin__applicant-name {
   display: block;
-  color: var(--ink, #111827);
+  color: var(--ink);
 }
 
 .teacher-admin__applicant-email {
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--ink-faint);
 }
 
 .teacher-admin__school-name {
@@ -541,21 +617,17 @@ onMounted(async () => {
 
 .teacher-admin__dept-name {
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b7280);
-}
-
-.teacher-admin__version {
-  font-family: var(--font-mono, monospace);
-  color: var(--color-text-muted, #6b7280);
+  color: var(--ink-soft);
 }
 
 .teacher-admin__date {
   font-size: 0.8125rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--ink-faint);
 }
 
 .teacher-admin__btn-review {
-  padding: 4px 10px;
+  min-height: 44px;
+  padding: 6px 14px;
   font-size: 0.8125rem;
 }
 
@@ -568,11 +640,10 @@ onMounted(async () => {
   text-transform: uppercase;
 }
 
-.badge--pending { background: rgba(30, 58, 138, 0.1); color: #1e3a8a; }
-.badge--needs_correction { background: rgba(217, 119, 6, 0.1); color: #d97706; }
-.badge--rejected { background: rgba(153, 27, 27, 0.1); color: #991b1b; }
+.badge--pending { background: var(--navy-bg); color: var(--navy); }
+.badge--needs_correction { background: var(--gold-bg); color: var(--ink); }
+.badge--rejected { background: var(--crimson-bg); color: var(--crimson-dark); }
 .badge--approved { background: rgba(21, 128, 61, 0.1); color: #15803d; }
-.badge--draft { background: rgba(107, 114, 128, 0.1); color: #6b7280; }
 
 .teacher-admin__pagination {
   display: flex;
@@ -584,127 +655,392 @@ onMounted(async () => {
 
 .teacher-admin__page-info {
   font-size: 0.875rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--ink-faint);
 }
 
 /* Review modal internals */
 .review-modal {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+  align-items: start;
+  gap: 24px;
+  max-width: 100%;
+}
+
+.review-modal__column {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-width: 600px;
+  gap: 20px;
+  min-width: 0;
 }
 
 .review-modal__applicant-info {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
 }
 
-.review-modal__current-role span {
-  font-family: var(--font-mono, monospace);
-  font-weight: 600;
+.review-modal__eyebrow,
+.review-modal__current-role,
+.review-modal__submitted-at,
+.review-modal__contact {
+  margin: 0;
 }
 
-.review-modal__doc-section h4 {
-  margin: 0 0 8px;
-  font-size: 0.9375rem;
+.review-modal__eyebrow {
+  margin-bottom: 8px;
+  color: var(--ink-faint);
+  font-size: 0.8125rem;
+}
+
+.review-modal__applicant-info h3 {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+  line-height: 1.25;
+}
+
+.review-modal__contact {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.review-modal__current-role,
+.review-modal__submitted-at {
+  margin-top: 8px;
+  color: var(--ink-faint);
+  font-size: 0.8125rem;
+}
+
+.review-modal__current-role strong {
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.review-modal__meta {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.review-modal__academic {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-modal__academic dt {
+  margin-bottom: 3px;
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+}
+
+.review-modal__academic dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.review-modal__section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.review-modal__section-heading h3,
+.review-modal__decision-box h3,
+.review-modal__closed-state h3,
+.review-modal__history h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.review-modal__doc-size,
+.review-modal__field-hint {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
 }
 
 .review-modal__doc-preview {
-  text-align: center;
-  background: var(--color-surface, #f9fafb);
-  border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: var(--radius-sm, 6px);
-  padding: 12px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.review-modal__doc-trigger {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 190px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-2);
+  cursor: zoom-in;
+}
+
+.review-modal__doc-trigger:focus-visible {
+  outline: 2px solid var(--crimson);
+  outline-offset: 3px;
 }
 
 .review-modal__doc-img {
+  display: block;
   max-width: 100%;
-  max-height: 240px;
+  max-height: 420px;
   object-fit: contain;
-  cursor: pointer;
   border-radius: 4px;
 }
 
 .review-modal__doc-hint {
+  margin: 0;
+  color: var(--ink-faint);
   font-size: 0.75rem;
-  color: var(--color-text-muted, #6b7280);
-  margin-top: 6px;
+  text-align: center;
 }
 
-.review-modal__decision-box {
+.review-modal__doc-missing {
   padding: 16px;
-  border: 1px solid var(--color-border, #e5e7eb);
-  border-radius: var(--radius-md, 8px);
-  background: var(--color-surface-subtle, rgba(0, 0, 0, 0.02));
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
 }
 
-.review-modal__decision-box h4 {
-  margin: 0 0 12px;
+.review-modal__decision-box,
+.review-modal__closed-state {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+
+.review-modal__decision-intro,
+.review-modal__closed-state > p {
+  margin: 8px 0 16px;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.5;
 }
 
 .review-modal__action-selector {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .review-modal__radio {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.875rem;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper-2);
   cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.review-modal__radio:has(input:checked) {
+  border-color: var(--gold);
+  background: var(--gold-bg);
+}
+
+.review-modal__radio:focus-within {
+  outline: 2px solid var(--crimson);
+  outline-offset: 2px;
+}
+
+.review-modal__radio input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--crimson);
+}
+
+.review-modal__radio > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.review-modal__radio strong {
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+
+.review-modal__radio small {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .review-modal__reason-field {
-  margin-top: 14px;
+  margin-top: 16px;
+}
+
+.review-modal__reason-field label {
+  display: grid;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .review-modal__reason-field textarea {
+  box-sizing: border-box;
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border, #d1d5db);
-  border-radius: var(--radius-sm, 6px);
-  font-size: 0.875rem;
-  margin-top: 4px;
+  min-height: 104px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+}
+
+.review-modal__reason-field textarea:focus-visible {
+  outline: 2px solid var(--crimson);
+  outline-offset: 2px;
+}
+
+.review-modal__field-hint {
+  margin: 6px 0 0;
 }
 
 .review-modal__approve-notice {
-  margin-top: 12px;
-  padding: 10px 12px;
+  margin-top: 14px;
+  padding: 12px;
+  border-left: 3px solid #15803d;
   background: rgba(21, 128, 61, 0.08);
-  border: 1px solid rgba(21, 128, 61, 0.2);
-  border-radius: var(--radius-sm, 6px);
   color: #166534;
   font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.review-modal__closed-state {
+  border-left: 3px solid var(--gold);
+}
+
+.review-modal__closed-state > p:last-child {
+  margin-bottom: 0;
+}
+
+.review-modal__closed-reason {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .review-modal__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.review-modal__actions .btn {
+  min-height: 44px;
 }
 
 .review-modal__error {
-  color: var(--brand-crimson, #b91c1c);
+  margin: 0;
+  color: var(--crimson-dark);
   font-size: 0.875rem;
 }
 
 .review-modal__history {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border, #e5e7eb);
+  grid-column: 1 / -1;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.review-modal__history ol {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-modal__history li {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-modal__history li > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
   font-size: 0.8125rem;
 }
 
-.review-modal__history ul {
-  padding-left: 18px;
+.review-modal__history li > div span,
+.review-modal__history li > p {
+  color: var(--ink-faint);
+  font-size: 0.8125rem;
+}
+
+.review-modal__history li > p {
   margin: 6px 0 0;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 860px) {
+  .review-modal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-modal__history {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .review-modal__applicant-info {
+    display: grid;
+  }
+
+  .review-modal__meta {
+    justify-items: start;
+  }
+
+  .review-modal__decision-box,
+  .review-modal__closed-state {
+    padding: 16px;
+  }
+
+  .review-modal__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-modal__actions .btn:only-child {
+    grid-column: 1 / -1;
+  }
 }
 
 .image-zoom-container {

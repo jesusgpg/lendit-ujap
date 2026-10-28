@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { isEligibleCampusEmail } from '../lib/emailEligibility'
+import { computed, nextTick, ref } from 'vue'
 import { useForm } from 'vee-validate'
 import { push } from 'notivue'
-import { isInstitutionalEmail, isValidEmail, useAuthStore } from '../stores/auth'
+import { isValidEmail, useAuthStore } from '../stores/auth'
 import type { LoginMode } from '../types'
 
 const props = withDefaults(
@@ -23,12 +24,15 @@ const auth = useAuthStore()
 
 const errorMessage = ref('')
 const showPassword = ref(false)
+const errorSummary = ref<HTMLElement | null>(null)
+const personalEmailOnStudentLogin = ref(false)
+const invalidFieldLinks = ref<Array<{ label: string; id: string }>>([])
 
 const { defineField, errors, handleSubmit, isSubmitting } = useForm({
   initialValues: { email: '', password: '' },
   validationSchema: {
     email: (value: string) =>
-      (isAdminLogin.value ? isValidEmail(value) : isInstitutionalEmail(value)) ||
+      (isAdminLogin.value ? isValidEmail(value) : isEligibleCampusEmail(value)) ||
       (isAdminLogin.value ? 'Escribe un correo válido.' : 'Usa tu correo institucional (@ujap.edu.ve).'),
     password: (value: string) => value.length >= 6 || 'La contraseña debe tener al menos 6 caracteres.',
   },
@@ -38,14 +42,36 @@ const [password, passwordAttrs] = defineField('password')
 
 const onSubmit = handleSubmit(async (values) => {
   errorMessage.value = ''
+  personalEmailOnStudentLogin.value = false
+  invalidFieldLinks.value = []
 
   const result = await auth.login({ email: values.email.trim(), password: values.password, mode: props.mode })
   if (!result.ok) {
     errorMessage.value = result.error ?? 'No se pudo iniciar sesión.'
     push.error({ title: 'No se pudo iniciar sesión', message: errorMessage.value })
+    await nextTick()
+    errorSummary.value?.focus()
     return
   }
   emit('success')
+}, async ({ errors }) => {
+  const typedEmail = email.value.trim()
+  personalEmailOnStudentLogin.value = !isAdminLogin.value && Boolean(typedEmail) && !isEligibleCampusEmail(typedEmail)
+  invalidFieldLinks.value = [
+    ...(errors.email ? [{ label: isAdminLogin.value ? 'Correo del administrador' : 'Correo institucional', id: 'login-email' }] : []),
+    ...(errors.password ? [{ label: 'Contraseña', id: 'login-password' }] : []),
+  ]
+
+  errorMessage.value = personalEmailOnStudentLogin.value
+    ? 'El acceso de estudiante solo admite correos @ujap.edu.ve. Si este es tu correo de administrador, entra por «Acceso administrativo».'
+    : 'Revisa los campos indicados antes de iniciar sesión.'
+
+  push.error({
+    title: personalEmailOnStudentLogin.value ? 'Correo no institucional' : 'Revisa el formulario',
+    message: errorMessage.value,
+  })
+  await nextTick()
+  errorSummary.value?.focus()
 })
 </script>
 
@@ -58,20 +84,24 @@ const onSubmit = handleSubmit(async (values) => {
     <label class="field">
       <span>{{ isAdminLogin ? 'Correo del administrador' : 'Correo institucional' }}</span>
       <input
+        id="login-email"
         v-model="email"
         v-bind="emailAttrs"
         type="email"
         :placeholder="isAdminLogin ? 'admin@gmail.com' : 'tu.nombre@ujap.edu.ve'"
         autocomplete="email"
         required
+        :aria-invalid="Boolean(errors.email)"
+        :aria-describedby="errors.email ? 'login-email-error' : undefined"
       />
-      <span v-if="errors.email" class="field__error">{{ errors.email }}</span>
+      <span v-if="errors.email" id="login-email-error" class="field__error">{{ errors.email }}</span>
     </label>
 
     <label class="field">
       <span>Contraseña</span>
       <div class="field__password-control">
         <input
+          id="login-password"
           v-model="password"
           v-bind="passwordAttrs"
           :type="showPassword ? 'text' : 'password'"
@@ -79,6 +109,8 @@ const onSubmit = handleSubmit(async (values) => {
           autocomplete="current-password"
           minlength="6"
           required
+          :aria-invalid="Boolean(errors.password)"
+          :aria-describedby="errors.password ? 'login-password-error' : undefined"
         />
         <button
           type="button"
@@ -101,10 +133,39 @@ const onSubmit = handleSubmit(async (values) => {
           </svg>
         </button>
       </div>
-      <span v-if="errors.password" class="field__error">{{ errors.password }}</span>
+      <span v-if="errors.password" id="login-password-error" class="field__error">{{ errors.password }}</span>
     </label>
 
-    <p v-if="errorMessage" class="auth-form__error">{{ errorMessage }}</p>
+    <div class="auth-form__aux-row">
+      <router-link
+        class="auth-form__forgot-link"
+        :to="{ path: '/recuperar-contrasena', query: isAdminLogin ? { mode: 'admin' } : undefined }"
+      >
+        ¿Olvidaste tu contraseña?
+      </router-link>
+    </div>
+
+    <div
+      v-if="errorMessage"
+      ref="errorSummary"
+      class="auth-form__error"
+      role="alert"
+      tabindex="-1"
+      aria-labelledby="login-error-title"
+    >
+      <strong id="login-error-title">
+        {{ personalEmailOnStudentLogin ? 'Este correo no sirve para el acceso de estudiante' : 'No se pudo iniciar sesión' }}
+      </strong>
+      <p>{{ errorMessage }}</p>
+      <ul v-if="invalidFieldLinks.length" class="auth-form__error-links">
+        <li v-for="field in invalidFieldLinks" :key="field.id">
+          <a :href="`#${field.id}`">Revisar {{ field.label.toLowerCase() }}</a>
+        </li>
+      </ul>
+      <router-link v-if="personalEmailOnStudentLogin" class="auth-form__admin-link" to="/admin/login">
+        Ir al acceso administrativo
+      </router-link>
+    </div>
 
     <button class="btn btn--primary auth-form__submit" type="submit" :disabled="isSubmitting">
       {{ isSubmitting ? 'Entrando…' : isAdminLogin ? 'Entrar al panel' : 'Entrar' }}
@@ -210,6 +271,40 @@ const onSubmit = handleSubmit(async (values) => {
   border-left: 3px solid var(--crimson-dark);
 }
 
+.auth-form__error:focus {
+  outline: 2px solid var(--crimson);
+  outline-offset: 2px;
+}
+
+.auth-form__error strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.auth-form__error p {
+  margin: 0;
+}
+
+.auth-form__error-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.auth-form__error-links a,
+.auth-form__admin-link {
+  color: var(--crimson-dark);
+  font-weight: 650;
+  text-underline-offset: 2px;
+}
+
+.auth-form__admin-link {
+  display: inline-block;
+  margin-top: 8px;
+}
+
 .field__error {
   color: var(--crimson-dark);
   font-size: 12px;
@@ -219,6 +314,26 @@ const onSubmit = handleSubmit(async (values) => {
 .auth-form__submit {
   width: 100%;
   margin-top: 4px;
+}
+
+.auth-form__aux-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -6px;
+  margin-bottom: 2px;
+}
+
+.auth-form__forgot-link {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--crimson-dark);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+
+.auth-form__forgot-link:hover {
+  color: var(--crimson);
 }
 
 .auth-form__switch {

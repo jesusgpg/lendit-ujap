@@ -9,6 +9,7 @@ const props = withDefaults(
     alt?: string
     hint?: string
     maxDimension?: number
+    ariaLabel?: string
   }>(),
   {
     multiple: false,
@@ -16,6 +17,7 @@ const props = withDefaults(
     alt: 'Foto del objeto',
     hint: 'JPG o PNG, hasta 5 MB. Se optimiza automáticamente.',
     maxDimension: undefined,
+    ariaLabel: undefined,
   },
 )
 
@@ -52,6 +54,9 @@ const singleValue = computed<string>(() => {
 })
 
 const dropzoneLabel = computed(() => {
+  if (props.ariaLabel) {
+    return props.ariaLabel
+  }
   if (props.multiple) {
     return `Subir fotos para ${props.alt.toLowerCase()} (hasta ${props.maxFiles})`
   }
@@ -255,7 +260,14 @@ function onDropThumbnail(targetIndex: number) {
         <div class="photo-dropzone__details">
           <strong>Foto lista</strong>
           <span>{{ props.hint }}</span>
-          <button type="button" class="btn btn--ghost btn--small" @click.stop="openPicker">Cambiar foto</button>
+          <button
+            type="button"
+            class="btn btn--ghost btn--small"
+            :aria-label="singleValue ? 'Cambiar ' + props.alt.toLowerCase() : 'Subir ' + props.alt.toLowerCase()"
+            @click.stop="openPicker"
+          >
+            Cambiar foto
+          </button>
         </div>
       </div>
 

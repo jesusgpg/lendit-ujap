@@ -70,6 +70,10 @@ export default async function handler(
         return { error: 'NOT_FOUND' as const }
       }
 
+      if (verification.status !== 'PENDING') {
+        return { error: 'NOT_PENDING' as const, currentStatus: verification.status }
+      }
+
       // Optimistic concurrency control
       if (verification.version !== expectedVersion) {
         return { error: 'CONCURRENCY_CONFLICT' as const, currentVersion: verification.version }
@@ -163,6 +167,14 @@ export default async function handler(
           error: 'CONCURRENCY_CONFLICT',
           message: 'La solicitud ha sido modificada por otro usuario o dictamen.',
           currentVersion: result.currentVersion,
+        })
+      }
+      if (result.error === 'NOT_PENDING') {
+        return res.status(409).json({
+          ok: false,
+          error: 'NOT_PENDING',
+          message: 'Esta solicitud ya fue dictaminada o todavía no se ha enviado a revisión.',
+          currentStatus: result.currentStatus,
         })
       }
     }

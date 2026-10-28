@@ -31,12 +31,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   const pageSize = Math.min(50, Math.max(1, parseInt(typeof query.pageSize === 'string' ? query.pageSize : '10', 10) || 10))
 
   const where: Prisma.TeacherVerificationWhereInput = {}
+  const reviewableStatuses = ['PENDING', 'NEEDS_CORRECTION', 'REJECTED', 'APPROVED'] as const
 
-  if (statusParam !== 'ALL') {
-    const validStatuses = ['DRAFT', 'PENDING', 'NEEDS_CORRECTION', 'REJECTED', 'APPROVED']
-    if (validStatuses.includes(statusParam)) {
-      where.status = statusParam as Prisma.EnumTeacherVerificationStatusFilter
-    }
+  if (statusParam === 'ALL') {
+    // Drafts have not been submitted and do not belong in the administrative review queue.
+    where.status = { in: [...reviewableStatuses] }
+  } else if (reviewableStatuses.includes(statusParam as typeof reviewableStatuses[number])) {
+    where.status = statusParam as Prisma.EnumTeacherVerificationStatusFilter
+  } else {
+    return res.status(400).json({ ok: false, error: 'INVALID_STATUS' })
   }
 
   if (schoolId) {
@@ -73,6 +76,11 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
         },
         school: { select: { id: true, name: true } },
         career: { select: { id: true, name: true } },
+        submissions: {
+          select: { version: true, submittedAt: true },
+          orderBy: { version: 'desc' },
+          take: 1,
+        },
       },
     }),
   ])
@@ -94,6 +102,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       department: item.department,
       status: item.status,
       version: item.version,
+      submittedVersion: item.submissions[0]?.version ?? null,
+      submittedAt: item.submissions[0]?.submittedAt.toISOString() ?? null,
       documentPath: item.documentPath,
       rejectionReason: item.rejectionReason,
       createdAt: item.createdAt.toISOString(),

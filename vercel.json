@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "/api?__apiPath=:path*"
+      "destination": "/api?__apiPath=/:path*"
     },
     {
       "source": "/(.*)",
