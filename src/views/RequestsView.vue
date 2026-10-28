@@ -34,7 +34,7 @@ function paymentBadgeInfo(request: LoanRequest) {
   switch (status) {
     case 'SIMULATED_PAID':
       return {
-        label: 'Pago aprobado',
+        label: 'Pago registrado',
         class: 'request-payment--paid',
         icon: '✓',
         status: 'SIMULATED_PAID',
@@ -348,7 +348,7 @@ async function performAction(request: LoanRequest, action: 'approve' | 'reject' 
                     type="button"
                     @click="openCheckout(request)"
                   >
-                    💳 Pagar alquiler (Simulado)
+                    💳 Pagar alquiler
                   </button>
                   <button
                     v-if="request.status === 'PENDING' && !isRequestExpired(request) && request.item.mode === 'RENTAL' && request.payment?.status === 'FAILED'"

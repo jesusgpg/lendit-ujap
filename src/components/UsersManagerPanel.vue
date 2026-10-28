@@ -233,7 +233,7 @@ async function sendPasswordReset(user: AdminUser) {
 
     <ModalDialog v-if="pendingDisable" :title="`Deshabilitar a ${pendingDisable.name}`" @close="savingUserId || (pendingDisable = null)">
       <div class="users__confirm">
-        <p>{{ pendingDisable.name }} ya no podrá iniciar sesión. Su historial de préstamos, conversaciones y pagos simulados se conserva y puedes habilitarla de nuevo.</p>
+        <p>{{ pendingDisable.name }} ya no podrá iniciar sesión. Su historial de préstamos, conversaciones y pagos se conserva y puedes habilitarla de nuevo.</p>
         <div class="users__confirm-actions">
           <button class="btn btn--small" type="button" :disabled="!!savingUserId" @click="pendingDisable = null">Cancelar</button>
           <button class="btn btn--small btn--primary" type="button" :disabled="!!savingUserId" @click="toggleActive(pendingDisable)">{{ savingUserId ? 'Deshabilitando…' : 'Deshabilitar' }}</button>

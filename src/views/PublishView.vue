@@ -56,7 +56,7 @@ function handlePublished() {
         </ol>
 
         <p class="publish-intro__note">
-          Puedes ofrecer un préstamo gratuito o definir una tarifa de alquiler. Los pagos del proyecto son simulados y no realizan cobros reales.
+          Puedes ofrecer un préstamo gratuito o definir una tarifa por cada solicitud de alquiler.
         </p>
         </details>
       </section>
