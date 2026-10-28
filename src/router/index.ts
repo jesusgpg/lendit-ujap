@@ -13,6 +13,7 @@ import CategoriesManagerPanel from '../components/CategoriesManagerPanel.vue'
 import CareersManagerPanel from '../components/CareersManagerPanel.vue'
 import SchoolsManagerPanel from '../components/SchoolsManagerPanel.vue'
 import AdminTeacherVerificationsPanel from '../components/AdminTeacherVerificationsPanel.vue'
+import PaymentSettingsPanel from '../components/PaymentSettingsPanel.vue'
 import AdminForbiddenView from '../views/AdminForbiddenView.vue'
 import CatalogView from '../views/CatalogView.vue'
 import PublishView from '../views/PublishView.vue'
@@ -30,7 +31,7 @@ const router = createRouter({
     { path: '/', name: 'landing', component: LandingView },
     { path: '/inicio', name: 'student-home', component: StudentHomeView, meta: { requiresAuth: true } },
     { path: '/cuenta', redirect: '/cuenta/perfil' },
-    { path: '/cuenta/:section(perfil|carnet|acreditacion|preferencias|seguridad)', name: 'account', component: AccountView, meta: { requiresAuth: true, allowAdmin: true } },
+    { path: '/cuenta/:section(perfil|carnet|acreditacion|preferencias|seguridad|pagos)', name: 'account', component: AccountView, meta: { requiresAuth: true, allowAdmin: true } },
     { path: '/mensajes', name: 'messages', component: MessagesView, meta: { requiresAuth: true } },
     { path: '/como-funciona', alias: '/comofunciona', name: 'how-it-works', component: CommunityInfoView, props: { section: 'how' } },
     { path: '/categorias', name: 'categories', component: CommunityInfoView, props: { section: 'categories' } },
@@ -44,12 +45,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     { path: '/solicitudes', name: 'requests', component: RequestsView, meta: { requiresAuth: true } },
-    { path: '/login', name: 'login', component: LoginView },
-    { path: '/register', name: 'register', component: RegisterView },
+    { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
+    { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } },
     { path: '/recuperar-contrasena', name: 'recovery-request', component: RecoveryRequestView },
     { path: '/auth/reset-password', name: 'reset-password', component: ResetPasswordView },
     { path: '/auth/confirmacion', name: 'email-confirmation', component: EmailConfirmationView },
-    { path: '/admin/login', name: 'admin-login', component: AdminLoginView },
+    { path: '/admin/login', name: 'admin-login', component: AdminLoginView, meta: { guestOnly: true } },
     { path: '/admin/acceso-denegado', name: 'admin-forbidden', component: AdminForbiddenView },
     {
       path: '/admin',
@@ -64,6 +65,7 @@ const router = createRouter({
         { path: 'careers', name: 'admin-careers', component: CareersManagerPanel, meta: { requiredPermission: 'careers.manage' } },
         { path: 'schools', name: 'admin-schools', component: SchoolsManagerPanel, meta: { requiredPermission: 'careers.manage' } },
         { path: 'verificaciones-docentes', name: 'admin-teacher-verifications', component: AdminTeacherVerificationsPanel, meta: { requiredPermission: 'teachers.review' } },
+        { path: 'pagos', name: 'admin-payments', component: PaymentSettingsPanel, meta: { requiredPermission: 'payments.manage' } },
       ],
     },
   ],

@@ -281,24 +281,83 @@ export interface SendMessageResponse {
 }
 
 
-export type FakePaymentMethod = 'campus_balance' | 'fake_card' | 'fake_mobile_pay'
-export type SimulationOutcome = 'success' | 'failure'
-
-export interface SimulatePaymentPayload {
-  requestId: string
-  outcome: SimulationOutcome
-  paymentMethod?: FakePaymentMethod
-}
-
 export interface PaymentRecord {
   id: string
-  requestId: string
+  requestId: string | null
   userId: string
   amount: number
   currency: Currency
   status: PaymentStatus
   provider: string | null
   providerReference: string | null
+  transferAmountVES: number | null
+  exchangeRate: number | null
+  exchangeRateDate: string | null
+  exchangeRateSource: string | null
   createdAt?: string
   updatedAt?: string
+}
+
+export interface BCVExchangeRates {
+  USD: number
+  EUR: number
+  effectiveDate: string
+  updatedAt: string
+  sourceUrl: string
+}
+
+export interface CentralPaymentAccount {
+  holder: string
+  bank: string
+  phone: string
+  nationalId: string
+  updatedAt?: string
+}
+
+export interface WalletAccount {
+  currency: Currency
+  balance: number
+}
+
+export type WalletTransactionType = 'RENTAL_CREDIT' | 'RENTAL_DEBIT' | 'WALLET_TOP_UP' | 'RENTAL_REFUND' | 'RENTAL_REVERSAL'
+
+export interface WalletTransaction {
+  id: string
+  type: WalletTransactionType
+  amount: number
+  currency: Currency
+  description: string | null
+  createdAt: string
+}
+
+export interface PaymentsAccountResponse {
+  ok: boolean
+  wallet: { accounts: WalletAccount[]; transactions: WalletTransaction[] }
+  centralAccount: CentralPaymentAccount | null
+  exchangeRates: BCVExchangeRates | null
+}
+
+export interface MobilePaymentSubmission {
+  proofPath: string
+  reference: string
+  bank: string
+  phone: string
+  nationalId: string
+}
+
+export interface MobileRentalPaymentPayload extends MobilePaymentSubmission {
+  action: 'mobile-rental'
+  requestId: string
+}
+
+export interface WalletTopUpPayload extends MobilePaymentSubmission {
+  action: 'wallet-top-up'
+  idempotencyKey: string
+  amount: number
+  currency: Currency
+}
+
+export interface WalletRentalPaymentPayload {
+  action: 'wallet-rental'
+  requestId: string
 }

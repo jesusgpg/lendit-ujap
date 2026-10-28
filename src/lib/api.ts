@@ -28,7 +28,20 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   ITEM_REQUESTED_IN_RANGE: 'El objeto ya no está disponible en las fechas solicitadas.',
   INVALID_REQUEST_DATES: 'Las fechas del préstamo no son válidas o están en el pasado.',
   ITEM_NOT_AVAILABLE: 'El objeto no está disponible actualmente.',
-  PAYMENT_REQUIRED: 'El solicitante debe completar el pago simulado antes de que puedas aceptar.',
+  PAYMENT_REQUIRED: 'El solicitante debe completar el pago antes de que puedas aceptar.',
+  INVALID_PAYMENT_PROFILE: 'Revisa el banco, teléfono y cédula registrados para Pago Móvil.',
+  BCV_RATE_UNAVAILABLE: 'No se pudo consultar una tasa BCV vigente. Inténtalo más tarde.',
+  UNSUPPORTED_PAYMENT_CURRENCY: 'La moneda de este pago no se puede convertir a bolívares.',
+  INVALID_PAYMENT_DETAILS: 'Completa los datos del pago y adjunta un comprobante válido.',
+  INVALID_TOP_UP_DETAILS: 'Revisa el monto, moneda y datos del pago de recarga.',
+  PAYMENT_PROOF_REQUIRED: 'No pudimos validar el comprobante. Vuelve a adjuntarlo.',
+  WALLET_INSUFFICIENT_FUNDS: 'Tu saldo disponible no cubre el importe de esta solicitud.',
+  IDENTITY_KEY_REUSED: 'La clave de esta operación ya se utilizó con otros datos. Vuelve a intentarlo.',
+  IDEMPOTENCY_KEY_REUSED: 'Esta recarga ya se procesó. Actualiza tu saldo para ver el resultado.',
+  PAYMENTS_API_FAILED: 'No se pudo completar la operación. Vuelve a intentarlo.',
+  PAYMENT_DESTINATION_NOT_CONFIGURED: 'La cuenta central de LendIt todavía no está configurada. No envíes un pago real.',
+  NOT_A_RENTAL_REQUEST: 'Esta solicitud no requiere un pago de alquiler.',
+  REQUEST_NOT_PENDING: 'La solicitud ya cambió de estado y no puede cobrarse.',
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {

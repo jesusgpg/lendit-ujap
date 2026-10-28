@@ -23,8 +23,19 @@ export function messageError(error: unknown) {
 }
 
 export const useMessagesStore = defineStore('messages', {
-  state: () => ({ threads: [] as MessageThread[], drafts: {} as Record<string, string>, isLoading: false, error: '', page: 0, hasMore: false }),
+  state: () => ({ threads: [] as MessageThread[], drafts: {} as Record<string, string>, newMessageIds: [] as string[], isLoading: false, error: '', page: 0, hasMore: false }),
+  getters: {
+    hasNewMessages: state => state.newMessageIds.length > 0,
+  },
   actions: {
+    markNewMessage(messageId: string) {
+      if (this.newMessageIds.includes(messageId)) return false
+      this.newMessageIds = [...this.newMessageIds.slice(-99), messageId]
+      return true
+    },
+    clearNewMessageNotifications() {
+      this.newMessageIds = []
+    },
     async load(more = false) {
       if (this.isLoading) return
       this.isLoading = true

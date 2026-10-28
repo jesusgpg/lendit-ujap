@@ -10,6 +10,7 @@ import {
   restorePendingRegistrationPhoto,
 } from '../lib/pendingRegistrationPhoto'
 import { useMessagesStore } from './messages'
+import { usePaymentsStore } from './payments'
 import type { AuthUser, LoginCredentials, RegisterInput } from '../types'
 
 interface AuthResult {
@@ -130,6 +131,7 @@ export const useAuthStore = defineStore('auth', {
           supabase.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_OUT') {
               this.user = null
+              usePaymentsStore().clear()
               this.isPasswordRecoveryActive = false
               this.passwordRecoveryUserId = null
               useMessagesStore().clear()
@@ -168,6 +170,7 @@ export const useAuthStore = defineStore('auth', {
         }
       } catch (error) {
         this.user = null
+        usePaymentsStore().clear()
         this.initializationError = errorMessage(error, 'No se pudo inicializar la sesión.')
       } finally {
         this.isLoading = false
@@ -181,12 +184,16 @@ export const useAuthStore = defineStore('auth', {
 
       if (!activeSession) {
         this.user = null
+        usePaymentsStore().clear()
         return
       }
 
       try {
         const response = await apiRequest<ProfileResponse>('/api/me')
-        if (this.user?.id !== response.user.id) useMessagesStore().clear()
+        if (this.user?.id !== response.user.id) {
+          useMessagesStore().clear()
+          usePaymentsStore().clear()
+        }
         this.user = response.user
       } catch (error) {
         // Cuentas creadas antes de que el trigger de base de datos estuviera activo
@@ -200,6 +207,10 @@ export const useAuthStore = defineStore('auth', {
           method: 'PATCH',
           body: JSON.stringify({}),
         })
+        if (this.user?.id !== response.user.id) {
+          useMessagesStore().clear()
+          usePaymentsStore().clear()
+        }
         this.user = response.user
       }
 
@@ -348,6 +359,7 @@ export const useAuthStore = defineStore('auth', {
           // Silencioso
         }
         this.user = null
+        usePaymentsStore().clear()
 
         return { ok: true }
       } catch (error) {
@@ -479,6 +491,7 @@ export const useAuthStore = defineStore('auth', {
           // La sesión local se limpia aunque Supabase no responda al cerrar sesión.
         }
         this.user = null
+        usePaymentsStore().clear()
         return { ok: false, error: errorMessage(error, 'No se pudo iniciar sesión.') }
       }
     },
@@ -487,6 +500,7 @@ export const useAuthStore = defineStore('auth', {
       // Se limpia de inmediato para que la UI refleje la salida sin esperar
       // la respuesta remota, que puede tardar o fallar por red.
       this.user = null
+      usePaymentsStore().clear()
       useMessagesStore().clear()
       await getSupabaseClient().auth.signOut()
     },

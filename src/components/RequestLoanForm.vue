@@ -64,7 +64,7 @@ async function submit(article: Article) {
       title: 'Solicitud enviada',
       message:
         article.mode === 'RENTAL'
-          ? 'Solicitud creada con éxito. Deberás completar el pago simulado desde Solicitudes para que el propietario pueda aprobarla.'
+          ? 'Tu solicitud fue creada. Puedes revisar su estado desde Solicitudes.'
           : 'El propietario debe aprobar la solicitud antes de entregarte el objeto.',
     })
     emit('submitted')
@@ -113,22 +113,9 @@ async function submit(article: Article) {
       ></textarea>
     </label>
 
-    <div v-if="article.mode === 'RENTAL'" class="payment-note">
-      <span class="payment-note__mark">₿</span>
-      <p>
-        <strong>Solicitud con pago simulado</strong> · Primero se crea tu solicitud por {{ formatOffer(article) }}. Luego deberás completar el pago simulado desde <strong>Solicitudes</strong> (sin cobro real) para que el propietario pueda aceptarla.
-      </p>
-    </div>
-
     <p v-if="errorMessage" class="request-form__error">{{ errorMessage }}</p>
     <button class="btn btn--primary" type="submit" :disabled="isSubmitting">
-      {{
-        isSubmitting
-          ? 'Enviando…'
-          : article.mode === 'RENTAL'
-            ? 'Crear solicitud (pagar luego en Solicitudes)'
-            : 'Enviar solicitud'
-      }}
+      {{ isSubmitting ? 'Enviando…' : 'Enviar solicitud' }}
     </button>
   </form>
 </template>
@@ -215,32 +202,6 @@ async function submit(article: Article) {
   color: var(--ink-faint);
   font-size: 11px;
   font-weight: 400;
-}
-
-.payment-note {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 13px;
-  border: 1px solid color-mix(in srgb, var(--gold) 44%, var(--line));
-  border-radius: 10px;
-  background: var(--gold-bg);
-}
-
-.payment-note__mark {
-  color: var(--gold);
-  font-family: var(--mono);
-  font-size: 17px;
-}
-
-.payment-note p {
-  color: var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.payment-note strong {
-  color: var(--ink);
 }
 
 .request-form__error {

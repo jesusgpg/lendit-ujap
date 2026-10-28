@@ -16,22 +16,41 @@ initAccessibility()
 
 const app = createApp(App)
 const pinia = createPinia()
+const adminSectionPermissions = ['roles.manage', 'users.manage', 'teachers.review', 'categories.manage', 'careers.manage', 'payments.manage']
+const guestOnlyRoutes = new Set(['login', 'register', 'admin-login'])
+
+function authenticatedDestination(to: import('vue-router').RouteLocationNormalizedLoaded, authStore: ReturnType<typeof useAuthStore>) {
+  const hasAdminAccess = authStore.isAdmin || adminSectionPermissions.some(permission => authStore.hasPermission(permission))
+  if (to.name === 'admin-login' && !hasAdminAccess) return { name: 'student-home' }
+
+  const redirect = typeof to.query.redirect === 'string' ? to.query.redirect : ''
+  const redirectPath = redirect.split(/[?#]/, 1)[0] ?? ''
+  const guestPaths = new Set(['/login', '/register', '/admin/login'])
+  if (redirect.startsWith('/') && !redirect.startsWith('//') && !guestPaths.has(redirectPath)) {
+    return redirect
+  }
+  return hasAdminAccess ? { name: 'admin' } : { name: 'student-home' }
+}
 
 router.beforeEach(async (to) => {
   const authStore = useAuthStore(pinia)
   await authStore.initialize()
 
+  if (typeof to.name === 'string' && guestOnlyRoutes.has(to.name) && authStore.isAuthenticated) {
+    return authenticatedDestination(to, authStore)
+  }
+
   if (to.name === 'landing' && authStore.isAuthenticated) {
     return { name: authStore.isAdmin ? 'admin' : 'student-home' }
   }
 
-  const adminSectionPermissions = ['roles.manage', 'users.manage', 'teachers.review', 'categories.manage', 'careers.manage']
   const adminSectionRoutes: Record<string, string> = {
     'roles.manage': 'admin-roles',
     'users.manage': 'admin-users',
     'teachers.review': 'admin-teacher-verifications',
     'categories.manage': 'admin-categories',
     'careers.manage': 'admin-careers',
+    'payments.manage': 'admin-payments',
   }
 
   // /admin sin subruta: primera sección autorizada.

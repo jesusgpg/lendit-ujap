@@ -23,7 +23,7 @@ function handleLoginSuccess() {
 }
 
 onMounted(() => {
-  if (['roles.manage', 'users.manage', 'categories.manage', 'careers.manage'].some((permission) => authStore.hasPermission(permission))) {
+  if (['roles.manage', 'users.manage', 'categories.manage', 'careers.manage', 'payments.manage'].some((permission) => authStore.hasPermission(permission))) {
     void router.replace({ name: 'admin' })
   }
 })

@@ -1,5 +1,7 @@
 # Registro y Validación Local QA — Allowlist Explícita
 
+> **Nota de vigencia (2026-10-27):** el allowlist de correos personales descrito en este informe fue retirado. El registro ahora exige `@ujap.edu.ve` en todos los entornos y Supabase Auth aplica el mismo bloqueo en la base de datos.
+
 Fecha: 2026-10-27  
 Colaboración: Codex (helpers y cableado de fuentes) + Antigravity (especificación, suites de pruebas y verificación).
 

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useMessagesStore } from '../stores/messages'
 import { getAppName } from '../data'
 import AccountMenu from './AccountMenu.vue'
 
@@ -21,6 +22,7 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const authStore = useAuthStore()
+const messagesStore = useMessagesStore()
 const showMemberUi = computed(() => authStore.isAuthenticated && !props.publicSession)
 const showAdminUi = computed(() => authStore.isAdmin && !props.publicSession)
 const crestSrc = `${import.meta.env.BASE_URL}images/Logo-UJAP1.png`
@@ -33,6 +35,10 @@ function toggleMobileMenu() {
 
 function closeMobileMenu() {
   isMobileMenuOpen.value = false
+}
+
+function clearMessageNotifications() {
+  messagesStore.clearNewMessageNotifications()
 }
 
 function handleLoginClick() {
@@ -59,7 +65,7 @@ function handleLoginClick() {
           <router-link v-if="showMemberUi && !showAdminUi" to="/publicar">Publicar</router-link>
           <router-link v-if="showMemberUi && !showAdminUi" to="/mis-publicaciones">Mis publicaciones</router-link>
           <router-link v-if="showMemberUi && !showAdminUi" to="/solicitudes">Solicitudes</router-link>
-          <router-link v-if="showMemberUi && !showAdminUi" to="/mensajes">Mensajes</router-link>
+          <router-link v-if="showMemberUi && !showAdminUi" to="/mensajes" :aria-label="messagesStore.hasNewMessages ? 'Mensajes, tienes mensajes nuevos' : 'Mensajes'" @click="clearMessageNotifications"><span>Mensajes</span><span v-if="messagesStore.hasNewMessages" class="message-alert-dot" aria-hidden="true"></span></router-link>
         </template>
         <template v-if="!showMemberUi">
           <router-link to="/como-funciona">Cómo funciona</router-link>
@@ -70,6 +76,8 @@ function handleLoginClick() {
           Administración
         </router-link>
       </nav>
+
+      <span v-if="showMemberUi && !showAdminUi" class="sr-only" role="status" aria-atomic="true">{{ messagesStore.hasNewMessages ? 'Tienes mensajes nuevos.' : '' }}</span>
 
       <div class="site-header__actions">
         <AccountMenu v-if="showMemberUi" @logout="emit('logout')" @open="closeMobileMenu" />
@@ -100,7 +108,7 @@ function handleLoginClick() {
             Explorar catálogo
           </router-link>
           <template v-if="showMemberUi && !showAdminUi">
-            <router-link v-if="!showAdminUi" to="/mensajes" class="mobile-nav__link" @click="closeMobileMenu">Mensajes</router-link>
+            <router-link v-if="!showAdminUi" to="/mensajes" class="mobile-nav__link" :aria-label="messagesStore.hasNewMessages ? 'Mensajes, tienes mensajes nuevos' : 'Mensajes'" @click="clearMessageNotifications(); closeMobileMenu()"><span>Mensajes</span><span v-if="messagesStore.hasNewMessages" class="message-alert-dot" aria-hidden="true"></span></router-link>
             <router-link to="/publicar" class="mobile-nav__link" @click="closeMobileMenu">
               Publicar un objeto
             </router-link>
@@ -190,6 +198,9 @@ function handleLoginClick() {
 }
 
 .site-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   text-decoration: none;
   font-size: 15px;
   font-weight: 550;
@@ -234,6 +245,16 @@ function handleLoginClick() {
 .site-nav__admin:hover {
   color: var(--navy);
   background: var(--gold-light);
+}
+
+.message-alert-dot {
+  display: inline-block;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--navy);
+  box-shadow: 0 0 0 2px var(--paper-2);
 }
 
 .site-header__actions {
@@ -309,6 +330,11 @@ function handleLoginClick() {
   background: var(--paper);
   border: 1px solid var(--line);
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.mobile-nav__link .message-alert-dot {
+  margin-left: auto;
+  box-shadow: 0 0 0 2px var(--paper);
 }
 
 .mobile-nav__link:hover,
