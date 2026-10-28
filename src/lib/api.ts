@@ -25,6 +25,7 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   EMPTY_UPDATE: 'No hay cambios que guardar.',
   UNSPLASH_NOT_CONFIGURED: 'Unsplash no está configurado en el servidor.',
   REQUEST_EXPIRED: 'La solicitud ha vencido porque la fecha de inicio ya pasó.',
+  REQUESTS_API_FAILED: 'No se pudo registrar la solicitud. Inténtalo de nuevo; conservamos los datos del formulario.',
   ITEM_REQUESTED_IN_RANGE: 'El objeto ya no está disponible en las fechas solicitadas.',
   INVALID_REQUEST_DATES: 'Las fechas del préstamo no son válidas o están en el pasado.',
   ITEM_NOT_AVAILABLE: 'El objeto no está disponible actualmente.',
@@ -39,7 +40,7 @@ const API_ERROR_MESSAGES: Record<string, string> = {
   IDENTITY_KEY_REUSED: 'La clave de esta operación ya se utilizó con otros datos. Vuelve a intentarlo.',
   IDEMPOTENCY_KEY_REUSED: 'Esta recarga ya se procesó. Actualiza tu saldo para ver el resultado.',
   PAYMENTS_API_FAILED: 'No se pudo completar la operación. Vuelve a intentarlo.',
-  PAYMENT_DESTINATION_NOT_CONFIGURED: 'La cuenta central de LendIt todavía no está configurada. No envíes un pago real.',
+  PAYMENT_DESTINATION_NOT_CONFIGURED: 'Pago Móvil no está disponible hasta que se configure la cuenta central de LendIt.',
   NOT_A_RENTAL_REQUEST: 'Esta solicitud no requiere un pago de alquiler.',
   REQUEST_NOT_PENDING: 'La solicitud ya cambió de estado y no puede cobrarse.',
 }

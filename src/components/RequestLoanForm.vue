@@ -113,9 +113,9 @@ async function submit(article: Article) {
       ></textarea>
     </label>
 
-    <p v-if="errorMessage" class="request-form__error">{{ errorMessage }}</p>
+    <p v-if="errorMessage" class="request-form__error" role="alert">{{ errorMessage }}</p>
     <p v-if="article.mode === 'RENTAL'" class="request-form__payment-note">
-      Después de enviar la solicitud se abrirá el pago simulado. El propietario podrá aceptarla cuando el pago esté registrado.
+      Después de enviar la solicitud podrás completar el pago. El propietario podrá aceptarla cuando quede registrado.
     </p>
     <button class="btn btn--primary" type="submit" :disabled="isSubmitting">
       {{ isSubmitting ? 'Enviando…' : 'Enviar solicitud' }}

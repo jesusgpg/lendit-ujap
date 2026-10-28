@@ -305,7 +305,7 @@ const onSubmit = handleSubmit(async (values) => {
         <input v-model="publicationMode" type="radio" value="RENTAL" />
         <span>
           <strong>Alquiler</strong>
-          <small>Usa un pago simulado por ahora.</small>
+          <small>El precio se cobra por cada solicitud.</small>
         </span>
       </label>
     </fieldset>

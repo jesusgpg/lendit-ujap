@@ -69,7 +69,7 @@ watch(() => props.section, (section) => { if (section === 'categories') void loa
       </template>
       <template v-else>
         <div class="community-guidelines"><article v-for="guideline in guidelines" :key="guideline.title"><h2>{{ guideline.title }}</h2><p>{{ guideline.text }}</p></article></div>
-        <aside class="community-callout"><h2>Sobre los alquileres</h2><p>El flujo de pago actual es una simulación académica. No cobra dinero real. Revisa el importe y el estado de la simulación dentro de la solicitud.</p><router-link class="btn btn--paper" to="/como-funciona">Ver cómo funciona</router-link></aside>
+        <aside class="community-callout"><h2>Sobre los alquileres</h2><p>Desde Solicitudes puedes revisar el importe, completar el pago y consultar su estado.</p><router-link class="btn btn--paper" to="/como-funciona">Ver cómo funciona</router-link></aside>
       </template>
       <div class="community-bottom"><p>Lo que necesitas puede estar en el campus.</p><router-link class="btn btn--primary" to="/catalogo">Explorar catálogo</router-link></div>
     </main>

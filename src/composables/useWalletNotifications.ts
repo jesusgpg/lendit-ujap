@@ -33,7 +33,7 @@ export function useWalletNotifications() {
     push.info({
       title: transaction.type === 'RENTAL_REFUND'
         ? 'Saldo reintegrado'
-        : transaction.type === 'RENTAL_REVERSAL' ? 'Ajuste de wallet' : 'Pago aprobado',
+        : transaction.type === 'RENTAL_REVERSAL' ? 'Ajuste de wallet' : 'Pago registrado',
       message: transaction.type === 'RENTAL_REFUND'
         ? `${amount} volvió a tu wallet${transaction.description ? ` · ${transaction.description}` : ''}.`
         : transaction.type === 'RENTAL_REVERSAL'
