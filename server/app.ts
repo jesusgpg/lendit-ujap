@@ -14,6 +14,7 @@ import userDetailHandler from '../backend/users/[id].js'
 import userResetPasswordHandler from '../backend/users/[id]/reset-password.js'
 import messagesHandler from '../backend/messages.js'
 import paymentsHandler from '../backend/payments.js'
+import notificationsHandler from '../backend/notifications.js'
 import teacherVerificationMeHandler from '../backend/teacher-verifications/me.js'
 import teacherVerificationMeCredentialHandler from '../backend/teacher-verifications/me/credential.js'
 import teacherVerificationsAdminHandler from '../backend/admin/teacher-verifications.js'
@@ -68,6 +69,7 @@ app.all('/api/users/:id/reset-password', withParamsAsQuery(userResetPasswordHand
 app.all('/api/users/:id', withParamsAsQuery(userDetailHandler))
 app.all('/api/messages', wrap(messagesHandler))
 app.all('/api/payments', wrap(paymentsHandler))
+app.all('/api/notifications', wrap(notificationsHandler))
 app.all('/api/teacher-verifications/me/credential', wrap(teacherVerificationMeCredentialHandler))
 app.all('/api/teacher-verifications/me', wrap(teacherVerificationMeHandler))
 app.all('/api/admin/teacher-verifications/:id/decision', withParamsAsQuery(teacherVerificationDecisionHandler))

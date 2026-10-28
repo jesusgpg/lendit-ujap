@@ -12,6 +12,7 @@ import {
   type AuthenticatedProfile,
 } from './_lib/auth.js'
 import { handleRequestMutation, listRequests } from './_lib/requests.js'
+import { addNotifications } from './_lib/notifications.js'
 import { canManageOwnedResource } from './_lib/workflowRules.js'
 
 const itemModeSchema = z.enum(['LOAN', 'RENTAL'])
@@ -335,6 +336,27 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       },
       include: itemInclude,
     })
+
+    try {
+      const audience = await prisma.user.findMany({
+        where: {
+          isActive: true,
+          id: { not: profile.id },
+          role: { name: { not: 'ADMIN' } },
+          ...(restrictedRoleIds?.length ? { roleId: { in: restrictedRoleIds } } : {}),
+        },
+        select: { id: true },
+      })
+      await addNotifications(prisma, audience.map(({ id }) => ({
+        userId: id,
+        type: 'NEW_LISTING' as const,
+        title: 'Nueva publicación',
+        message: `«${item.title}» ya está disponible en el catálogo.`,
+        href: `/catalogo?search=${encodeURIComponent(item.title)}`,
+      })))
+    } catch (notificationError) {
+      console.error('Could not notify about new listing', notificationError instanceof Error ? notificationError.message : 'unknown error')
+    }
 
     return res.status(201).json({ ok: true, item: serializeItem(item) })
   } catch (error) {

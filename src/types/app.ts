@@ -275,6 +275,18 @@ export interface MessageThread {
   updatedAt: string
 }
 
+export type NotificationType = 'NEW_LISTING' | 'NEW_REQUEST' | 'REQUEST_UPDATED' | 'NEW_MESSAGE' | 'PAYMENT_RECEIVED' | 'LOAN_RETURNED'
+
+export interface AppNotification {
+  id: string
+  type: NotificationType
+  title: string
+  message: string
+  href: string
+  readAt: string | null
+  createdAt: string
+}
+
 export interface SendMessageResponse {
   ok: boolean
   message: ChatMessage

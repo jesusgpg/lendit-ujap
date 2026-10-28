@@ -3,9 +3,11 @@ import { Notivue, NotivueSwipe, Notification, NotificationProgress, type Notivue
 import { useMessageNotifications } from './composables/useMessageNotifications'
 import { useWalletNotifications } from './composables/useWalletNotifications'
 import { useNativeFormAlerts } from './composables/useNativeFormAlerts'
+import { useRealtimeNotifications } from './composables/useRealtimeNotifications'
 
 useMessageNotifications()
 useWalletNotifications()
+useRealtimeNotifications()
 const { formAlert, dismissFormAlert } = useNativeFormAlerts()
 
 const lenditTheme: NotivueTheme = {

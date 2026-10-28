@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { push } from 'notivue'
-import type { Article } from '../types'
+import type { Article, LoanRequest } from '../types'
 import { useRequestsStore } from '../stores/requests'
 import ItemPhotoGallery from './ItemPhotoGallery.vue'
 
@@ -10,7 +10,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'submitted'): void
+  (e: 'submitted', request: LoanRequest): void
 }>()
 
 const requestsStore = useRequestsStore()
@@ -54,7 +54,7 @@ async function submit(article: Article) {
 
   isSubmitting.value = true
   try {
-    await requestsStore.create({
+    const request = await requestsStore.create({
       itemId: article.id,
       startsAt: starts.toISOString(),
       endsAt: ends.toISOString(),
@@ -64,10 +64,10 @@ async function submit(article: Article) {
       title: 'Solicitud enviada',
       message:
         article.mode === 'RENTAL'
-          ? 'Tu solicitud fue creada. Puedes revisar su estado desde Solicitudes.'
+          ? 'Tu solicitud fue creada. Completa el pago para que el propietario pueda aceptarla.'
           : 'El propietario debe aprobar la solicitud antes de entregarte el objeto.',
     })
-    emit('submitted')
+    emit('submitted', request)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'No se pudo enviar la solicitud.'
   } finally {
@@ -114,6 +114,9 @@ async function submit(article: Article) {
     </label>
 
     <p v-if="errorMessage" class="request-form__error">{{ errorMessage }}</p>
+    <p v-if="article.mode === 'RENTAL'" class="request-form__payment-note">
+      Después de enviar la solicitud se abrirá el pago simulado. El propietario podrá aceptarla cuando el pago esté registrado.
+    </p>
     <button class="btn btn--primary" type="submit" :disabled="isSubmitting">
       {{ isSubmitting ? 'Enviando…' : 'Enviar solicitud' }}
     </button>
@@ -207,6 +210,16 @@ async function submit(article: Article) {
 .request-form__error {
   color: var(--crimson-dark);
   font-size: 13px;
+}
+
+.request-form__payment-note {
+  padding: 11px 13px;
+  border-left: 3px solid var(--gold);
+  border-radius: 0 8px 8px 0;
+  background: var(--gold-bg);
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .request-form .btn {

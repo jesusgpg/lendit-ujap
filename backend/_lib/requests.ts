@@ -3,6 +3,7 @@ import { Prisma } from '../../generated/prisma/client.js'
 import { prisma } from './prisma.js'
 import { hasPermission, isTeacherApplicant, type ApiRequest, type ApiResponse, type AuthenticatedProfile } from './auth.js'
 import { canManageOwnedResource, canSeeRestrictedItem, requestDateError } from './workflowRules.js'
+import { addNotification } from './notifications.js'
 
 const newRequestSchema = z.object({
   resource: z.literal('request'),
@@ -275,6 +276,7 @@ async function createRequest(req: ApiRequest, res: ApiResponse, profile: Authent
     where: { id: parsed.data.itemId },
     select: {
       id: true,
+      title: true,
       ownerId: true,
       status: true,
       mode: true,
@@ -318,6 +320,19 @@ async function createRequest(req: ApiRequest, res: ApiResponse, profile: Authent
         endsAt: ends,
         message: parsed.data.message || null,
       },
+    })
+
+    await transaction.itemConversation.upsert({
+      where: { itemId_requesterId: { itemId: item.id, requesterId: profile.id } },
+      create: { itemId: item.id, requesterId: profile.id },
+      update: {},
+    })
+    await addNotification(transaction, {
+      userId: item.ownerId,
+      type: 'NEW_REQUEST',
+      title: 'Nueva solicitud',
+      message: `Alguien solicitó «${item.title}».`,
+      href: '/solicitudes',
     })
 
     if (item.mode === 'RENTAL' && item.price !== null && item.currency !== null) {
@@ -433,6 +448,13 @@ async function approveRequest(requestId: string, res: ApiResponse, profile: Auth
         where: { id: current.id },
         data: { status: 'APPROVED' },
       })
+      await addNotification(transaction, {
+        userId: current.requester.id,
+        type: 'REQUEST_UPDATED',
+        title: 'Solicitud aceptada',
+        message: `Tu solicitud para «${current.item.title}» fue aceptada.`,
+        href: '/solicitudes',
+      })
       const loan = await transaction.loan.create({
         data: {
           itemId: current.itemId,
@@ -456,12 +478,21 @@ async function approveRequest(requestId: string, res: ApiResponse, profile: Auth
           startsAt: { lt: current.endsAt },
           endsAt: { gt: current.startsAt },
         },
-        select: { id: true },
+        select: { id: true, requesterId: true },
       })
       if (competing.length) {
         const ids = competing.map(({ id }) => id)
         await transaction.loanRequest.updateMany({ where: { id: { in: ids } }, data: { status: 'REJECTED' } })
-        for (const competingId of ids) await refundRentalPayment(transaction, competingId)
+        for (const competingRequest of competing) {
+          await refundRentalPayment(transaction, competingRequest.id)
+          await addNotification(transaction, {
+            userId: competingRequest.requesterId,
+            type: 'REQUEST_UPDATED',
+            title: 'Solicitud no disponible',
+            message: `Otra solicitud para «${current.item.title}» fue aceptada y se cruzaba con tus fechas.`,
+            href: '/solicitudes',
+          })
+        }
       }
 
       return transaction.loanRequest.findUniqueOrThrow({ where: { id: updated.id }, include: requestInclude })
@@ -498,7 +529,17 @@ async function rejectOrCancelRequest(
         throw new RequestWorkflowError(409, 'REQUEST_ALREADY_PROCESSED')
       }
       await refundRentalPayment(transaction, requestId)
-      return transaction.loanRequest.findUniqueOrThrow({ where: { id: requestId }, include: requestInclude })
+      const updated = await transaction.loanRequest.findUniqueOrThrow({ where: { id: requestId }, include: requestInclude })
+      await addNotification(transaction, {
+        userId: action === 'reject' ? updated.requester.id : updated.item.owner.id,
+        type: 'REQUEST_UPDATED',
+        title: action === 'reject' ? 'Solicitud rechazada' : 'Solicitud cancelada',
+        message: action === 'reject'
+          ? `Tu solicitud para «${updated.item.title}» fue rechazada.`
+          : `La solicitud para «${updated.item.title}» fue cancelada.`,
+        href: '/solicitudes',
+      })
+      return updated
     })
 
     return res.status(200).json({ ok: true, request: serializeRequest(updated, profile.id) })
@@ -513,7 +554,7 @@ async function rejectOrCancelRequest(
 async function returnLoan(loanId: string, res: ApiResponse, profile: AuthenticatedProfile) {
   const loan = await prisma.loan.findUnique({
     where: { id: loanId },
-    select: { id: true, ownerId: true, borrowerId: true, itemId: true, requestId: true, status: true },
+    select: { id: true, ownerId: true, borrowerId: true, itemId: true, requestId: true, status: true, item: { select: { title: true } } },
   })
   if (!loan) {
     return res.status(404).json({ ok: false, error: 'LOAN_NOT_FOUND' })
@@ -535,6 +576,13 @@ async function returnLoan(loanId: string, res: ApiResponse, profile: Authenticat
     }
 
     await transaction.item.update({ where: { id: loan.itemId }, data: { status: 'AVAILABLE' } })
+    await addNotification(transaction, {
+      userId: loan.ownerId === profile.id ? loan.borrowerId : loan.ownerId,
+      type: 'LOAN_RETURNED',
+      title: 'Devolución registrada',
+      message: `Se registró la devolución de «${loan.item.title}».`,
+      href: '/solicitudes',
+    })
     if (!loan.requestId) return null
     return transaction.loanRequest.findUniqueOrThrow({ where: { id: loan.requestId }, include: requestInclude })
   })

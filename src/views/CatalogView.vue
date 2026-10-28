@@ -6,12 +6,13 @@ import ArticleCard from '../components/ArticleCard.vue'
 import LoadingState from '../components/LoadingState.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import RequestLoanForm from '../components/RequestLoanForm.vue'
+import RentalCheckoutModal from '../components/RentalCheckoutModal.vue'
 import SiteFooter from '../components/SiteFooter.vue'
 import SiteHeader from '../components/SiteHeader.vue'
 import { useArticlesStore } from '../stores/articles'
 import { useAuthStore } from '../stores/auth'
 import { useCatalogStore } from '../stores/catalog'
-import type { Article } from '../types'
+import type { Article, LoanRequest } from '../types'
 
 const router = useRouter()
 const route = useRoute()
@@ -25,6 +26,7 @@ const selectedArticle = ref<Article | null>(null)
 const offerMode = ref('all')
 const sortBy = ref('recent')
 const catalogError = ref('')
+const selectedCheckoutRequest = ref<LoanRequest | null>(null)
 
 const filteredArticles = computed(() => {
   const query = search.value.trim().toLowerCase()
@@ -96,8 +98,13 @@ function askOwner(articleId: string) {
   void router.push(authStore.isAuthenticated ? destination.fullPath : { name: 'login', query: { redirect: destination.fullPath } })
 }
 
-function handleRequestSubmitted() {
+function handleRequestSubmitted(request: LoanRequest) {
   closeRequestForm()
+  if (request?.item.mode === 'RENTAL') selectedCheckoutRequest.value = request
+}
+
+function closeCheckout() {
+  selectedCheckoutRequest.value = null
 }
 
 function clearFilters() {
@@ -138,6 +145,7 @@ function clearFilters() {
     </main>
     <SiteFooter />
     <ModalDialog v-if="selectedArticle" wide title="Solicitar objeto" @close="closeRequestForm"><RequestLoanForm :article="selectedArticle" @submitted="handleRequestSubmitted" /></ModalDialog>
+    <RentalCheckoutModal v-if="selectedCheckoutRequest" :request="selectedCheckoutRequest" @close="closeCheckout" />
   </div>
 </template>
 

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { prisma } from './_lib/prisma.js'
 import { findThread, inbox, serializeThread, threadInclude } from './_lib/message-threads.js'
+import { addNotification } from './_lib/notifications.js'
 import { getAuthenticatedProfile, isAdministrativeProfile, isTeacherApplicant, statusForProfileError, type ApiRequest, type ApiResponse } from './_lib/auth.js'
 
 const threadSchema = z.object({ requestId: z.string().uuid().optional(), conversationId: z.string().uuid().optional() })
@@ -28,14 +29,14 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       if (!item) return res.status(404).json({ ok: false, error: 'ITEM_NOT_FOUND' })
       if (item.ownerId === profile.id) return res.status(409).json({ ok: false, error: 'OWN_ITEM' })
       const existing = await prisma.itemConversation.findUnique({ where: { itemId_requesterId: { itemId: item.id, requesterId: profile.id } }, include: threadInclude })
-      if (existing) return res.status(200).json({ ok: true, thread: serializeThread(existing, 'inquiry', profile.id) })
+      if (existing) return res.status(200).json({ ok: true, thread: serializeThread(existing, profile.id) })
       if (item.status !== 'AVAILABLE' || !item.owner.isActive) return res.status(409).json({ ok: false, error: 'ITEM_NOT_AVAILABLE' })
       if (item.visibleToRoles.length && (isTeacherApplicant(profile) || !item.visibleToRoles.some(role => role.roleId === profile.roleId))) return res.status(403).json({ ok: false, error: 'FORBIDDEN' })
       const conversation = await prisma.itemConversation.upsert({
         where: { itemId_requesterId: { itemId: item.id, requesterId: profile.id } },
         create: { itemId: item.id, requesterId: profile.id }, update: {}, include: threadInclude,
       })
-      return res.status(200).json({ ok: true, thread: serializeThread(conversation, 'inquiry', profile.id) })
+      return res.status(200).json({ ok: true, thread: serializeThread(conversation, profile.id) })
     }
     const parsed = req.method === 'GET'
       ? threadSchema.safeParse({ requestId: queryValue(req.query?.requestId), conversationId: queryValue(req.query?.conversationId) })
@@ -45,7 +46,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const kind = conversationId ? 'inquiry' : 'request'
     const resolved = await findThread(kind, (conversationId ?? requestId)!, profile.id)
     if (!resolved.thread) return res.status(resolved.error === 'FORBIDDEN' ? 403 : 404).json({ ok: false, error: resolved.error === 'THREAD_NOT_FOUND' && kind === 'request' ? 'REQUEST_NOT_FOUND' : resolved.error })
-    const where = conversationId ? { conversationId } : { requestId }
+    const where = { conversationId: resolved.thread.id }
     if (req.method === 'GET') {
       const rawCursor = queryValue(req.query?.before)
       const cursor = rawCursor ? z.string().uuid().safeParse(rawCursor) : null
@@ -56,7 +57,17 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       return res.status(200).json({ ok: true, thread: resolved.thread, messages: visible.reverse(), nextCursor: rows.length > 100 ? visible[0]?.id : null })
     }
     if (!resolved.thread.canSend) return res.status(409).json({ ok: false, error: kind === 'request' ? 'REQUEST_NOT_ACTIVE' : 'CONVERSATION_CLOSED' })
-    const message = await prisma.chatMessage.create({ data: { ...where, senderId: profile.id, content: (parsed.data as { content: string }).content } })
+    const message = await prisma.$transaction(async transaction => {
+      const saved = await transaction.chatMessage.create({ data: { ...where, senderId: profile.id, content: (parsed.data as { content: string }).content } })
+      await addNotification(transaction, {
+        userId: resolved.thread.counterpart.id,
+        type: 'NEW_MESSAGE',
+        title: 'Mensaje nuevo',
+        message: `${resolved.thread.item.title} · ${saved.content.slice(0, 108)}`,
+        href: `/mensajes?conversation=${resolved.thread.id}`,
+      })
+      return saved
+    })
     return res.status(201).json({ ok: true, message })
   } catch (err) {
     console.error('Messages API failed', err instanceof Error ? err.message : 'unknown error')

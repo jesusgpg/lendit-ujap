@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth'
 import { useMessagesStore } from '../stores/messages'
 import { getAppName } from '../data'
 import AccountMenu from './AccountMenu.vue'
+import NotificationsBell from './NotificationsBell.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -80,6 +81,7 @@ function handleLoginClick() {
       <span v-if="showMemberUi && !showAdminUi" class="sr-only" role="status" aria-atomic="true">{{ messagesStore.hasNewMessages ? 'Tienes mensajes nuevos.' : '' }}</span>
 
       <div class="site-header__actions">
+        <NotificationsBell v-if="showMemberUi && !showAdminUi" />
         <AccountMenu v-if="showMemberUi" @logout="emit('logout')" @open="closeMobileMenu" />
         <button v-else-if="!props.publicSession" class="btn btn--primary btn--small" type="button" @click="handleLoginClick">Empezar</button>
 
