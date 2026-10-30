@@ -1,148 +1,179 @@
 # LendIt UJAP 🤝
 
-**LendIt UJAP** es una red de préstamos temporales de objetos entre estudiantes de la **Universidad José Antonio Páez (UJAP)**. El concepto es similar al de Airbnb, pero adaptado a la comunidad universitaria: permite a los estudiantes prestar y pedir prestados artículos útiles en el campus como calculadoras, cargadores, laptops, batas de laboratorio, y más, por un tiempo limitado y de forma segura.
+LendIt UJAP es una plataforma de préstamos y alquileres temporales de objetos para la comunidad de la **Universidad José Antonio Páez (UJAP)**. Permite publicar artículos, coordinar solicitudes y devoluciones y conversar con otros miembros del campus.
 
-Este proyecto ha sido desarrollado en el marco del curso **Electiva Profesional III – Tópicos Especiales en Programación Web**.
+Proyecto desarrollado para **Electiva Profesional III – Tópicos Especiales en Programación Web**. Los pagos son demostrativos: el sistema registra operaciones simuladas y no verifica transferencias ni realiza cargos bancarios reales.
 
----
+## Stack tecnológico
 
-## 🚀 Stack Tecnológico
+- **Frontend:** Vue 3 (Composition API y `<script setup>`), TypeScript, Vue Router y Pinia.
+- **Interfaz:** CSS propio, temas claro/oscuro y opciones de accesibilidad; Fraunces, Archivo e IBM Plex Mono. Validación con VeeValidate y Zod; notificaciones con Notivue.
+- **Backend:** Express 5 con un router compartido entre desarrollo local y una única función de Vercel.
+- **Datos y autenticación:** PostgreSQL, Prisma 7, Supabase Auth, Storage y Realtime.
+- **Herramientas:** Vite, pnpm, Vitest y Supertest.
 
-El proyecto está construido usando prácticas modernas de desarrollo web:
+## Funcionalidades implementadas
 
-- **Frontend**: [Vue 3](https://vuejs.org/) (Composition API, `<script setup>`) con [TypeScript](https://www.typescriptlang.org/)
-- **Estilos**: Vanilla CSS con un sistema premium de diseño adaptable y soporte nativo para **Modo Oscuro** (Theme auto-detectado).
-- **Manejador de Estado**: [Pinia](https://pinia.vuejs.org/) para coordinar la sesión y datos remotos.
-- **Enrutado**: [Vue Router](https://router.vuejs.org/)
-- **Herramientas de Construcción**: [Vite](https://vite.dev/)
-- **Pruebas**: [Vitest](https://vitest.dev/) para pruebas unitarias.
-- **Backend**: funciones API de Vercel, [Supabase Auth](https://supabase.com/docs/guides/auth) y PostgreSQL con [Prisma](https://www.prisma.io/).
+- **Catálogo:** búsqueda y filtros, categorías, artículos con varias fotos y modalidades de préstamo gratuito (`LOAN`) o alquiler (`RENTAL`) en USD, EUR o VES.
+- **Publicaciones:** creación, edición, pausa, reactivación y eliminación según permisos y estado; audiencia restringible por rol y fotos en Supabase Storage.
+- **Solicitudes y préstamos:** fechas de inicio y devolución, mensaje al propietario, aprobación, rechazo, cancelación y registro de devolución. Las solicitudes se gestionan desde `/api/items` con `view=requests` o `resource: "request"`.
+- **Cuenta:** registro institucional `@ujap.edu.ve`, confirmación de correo, inicio de sesión, recuperación/cambio de contraseña y edición del perfil. Carnet estudiantil y credenciales docentes en almacenamiento privado.
+- **Verificación docente:** postulación, carga de credenciales, revisión administrativa y dictámenes. Los postulantes pendientes de aprobación tienen restringidas las operaciones del marketplace.
+- **Mensajes y notificaciones:** consultas sobre artículos y conversaciones vinculadas a solicitudes, bandeja en `/mensajes`, indicadores de lectura y actualizaciones mediante Supabase Realtime.
+- **Pagos simulados:** Pago Móvil con referencia y comprobante, wallet por moneda, recargas y pagos de alquiler. Conversión a bolívares con tasa BCV y configuración administrativa de una cuenta receptora central. El estado de éxito es `SIMULATED_PAID`.
+- **Administración:** roles/permisos, usuarios, categorías, carreras, escuelas, verificaciones docentes y cuenta receptora de pagos.
 
----
+Los artículos quedan disponibles al publicarse; no existe una cola de moderación de publicaciones. El acceso administrativo separado permite cuentas no institucionales con permisos administrativos. La selección de una cuenta docente al registrarse no sustituye la verificación de credenciales.
 
-## 📁 Estructura del Proyecto
-
-El código fuente está estructurado de manera modular y desacoplada, facilitando futuras integraciones de APIs:
+## Estructura del proyecto
 
 ```text
+api/index.ts        # Entrada única de Vercel; no agregar otros handlers aquí
+backend/            # Handlers HTTP, autorización, pagos y reglas de negocio
+server/app.ts       # Router Express compartido por Vercel, desarrollo y pruebas
+server/dev-api.ts   # Inicio del servidor local
 src/
-├── types/         # Interfaces de TypeScript puras (Article, Category, AuthUser, etc.)
-├── data/          # Datos simulados (mocks) y funciones auxiliares (independientes para fácil reemplazo por API)
-├── stores/        # Stores de Pinia conectados a Supabase y a la API
-├── lib/           # Cliente Supabase y cliente HTTP del frontend
-├── router/        # Configuración de rutas (Vue Router)
-├── components/    # Componentes de presentación reutilizables:
-│   ├── ArticleCard.vue         # Tarjeta de visualización de artículo disponible/prestado
-│   ├── CategoryCard.vue        # Tarjetas de categorías
-│   ├── StepCard.vue            # Tarjeta de pasos explicativos
-│   ├── ModalDialog.vue         # Diálogo modal premium adaptable
-│   ├── AuthPageShell.vue       # Plantilla visual para las páginas de autenticación
-│   ├── LoginForm.vue           # Acceso institucional y administrativo reutilizable
-│   ├── RegisterForm.vue        # Registro con elección de rol (Estudiante/Profesor)
-│   ├── PhotoDropzone.vue       # Carga y optimización de fotos por arrastre
-│   ├── RequestLoanForm.vue     # Solicitud con fechas y pago simulado
-│   ├── LoadingState.vue         # Loader visual reutilizable para paneles
-│   ├── PublishArticleForm.vue  # Formulario para publicar nuevos objetos (con audiencia por rol)
-│   └── RoleManagerPanel.vue    # Panel de administración de roles/permisos (solo ADMIN)
-├── views/         # Vistas principales de la aplicación:
-│   ├── LandingView.vue         # Vista principal (Landing page con todas las secciones)
-│   ├── CatalogView.vue         # Catálogo con búsqueda y filtros
-│   ├── PublishView.vue         # Publicación y edición de objetos
-│   ├── MyPublicationsView.vue  # Estante del propietario
-│   ├── RequestsView.vue        # Solicitudes, aprobaciones y devoluciones
-│   ├── AdminLoginView.vue      # Acceso separado para administradores
-│   ├── LoginView.vue           # Página de inicio de sesión comunitario
-│   └── RegisterView.vue        # Página de registro comunitario
-├── App.vue        # Componente raíz
-└── main.ts        # Punto de entrada de la aplicación
+├── components/     # Formularios, galerías, chat y paneles reutilizables
+├── composables/    # Alertas y suscripciones a mensajes/notificaciones
+├── data/           # Contenido estático de la landing; no inventario simulado
+├── lib/            # Clientes HTTP/Supabase, imágenes y utilidades
+├── router/         # Rutas de Vue Router
+├── stores/         # Estado y acceso a los datos remotos con Pinia
+├── types/          # Tipos de la aplicación
+├── views/          # Pantallas públicas, cuenta, marketplace y administración
+├── style.css       # Tokens y estilos de marca
+└── main.ts         # Inicio de Vue y controles de navegación
+shared/             # Reglas compartidas, incluida la política de correo
+prisma/             # Esquema y migraciones de PostgreSQL/Supabase
+scripts/            # Generación de contratos, pruebas y utilidades
+contracts/          # Especificación OpenAPI
+tests/api/         # Pruebas de integración HTTP y BD temporal
+docs/              # Guías, contratos y reportes de implementación
+design-system/     # Sistema visual del proyecto
 ```
 
----
+## Preparación y desarrollo local
 
-## ⚡ Características Implementadas
+Usa **Node.js 22.12 o posterior de la rama 22**, o una versión compatible con las dependencias instaladas, y **pnpm 10.19.0** (declarado en `package.json`). Necesitas un proyecto de Supabase para Auth, Storage y Realtime, además de PostgreSQL accesible para la API.
 
-1. **Diseño Responsivo y Premium**:
-   - Cabecera sticky optimizada para móviles (con ocultación automática de links de escritorio).
-   - Animaciones y transiciones premium en modales, cargas y banners de notificaciones.
-   - Soporte automático para **Modo Oscuro** en base a las preferencias del sistema del usuario.
+1. Copia `.env.example` a `.env` y completa las variables indicadas abajo. En PowerShell: `Copy-Item .env.example .env`.
+2. Instala las dependencias:
 
-2. **Flujo de Usuario Integrado**:
-    - **Catálogo y peticiones**: Los estudiantes pueden explorar, filtrar y solicitar objetos indicando inicio, devolución y un mensaje para el propietario.
-    - **Ciclo del préstamo**: El propietario puede aprobar o rechazar solicitudes; solicitante y propietario pueden registrar la devolución.
-    - **Publicación inteligente**: Se pueden crear, editar, pausar, reactivar y eliminar publicaciones. Las fotos se guardan en Supabase Storage.
-    - **Alquiler demostrativo**: Una publicación puede definir precio y moneda (USD, EUR o VES). La solicitud registra un pago simulado, sin cobro real.
-    - **Publicación autenticada**: Si un usuario no autenticado intenta publicar o pedir, la aplicación lo lleva a `/login` y conserva la ruta pendiente.
+   ```bash
+   pnpm install
+   ```
 
-3. **Validación y Persistencia**:
-   - Acceso institucional para estudiantes/profesores con validación `@ujap.edu.ve` y acceso administrativo separado que acepta Gmail, siempre que la cuenta tenga permisos de administrador.
-    - Creación, edición, eliminación y consulta de artículos mediante `GET/POST/PATCH/DELETE /api/items`; los datos ya no dependen de `localStorage`.
-    - Solicitudes y préstamos mediante `GET /api/items?view=requests` y mutaciones con `resource: "request"`, sin superar el límite de funciones de Vercel.
-   - Registro e inicio de sesión con Supabase Auth y sincronización del perfil mediante `GET/PATCH /api/me`.
-    - Fotos de perfil optimizadas en el navegador y fotos de objetos almacenadas en el bucket `item-photos` de Supabase Storage.
-   - Panel administrativo dividido por rutas: `/admin/roles`, `/admin/users`, `/admin/categories` y `/admin/careers`.
-   - Pasos informativos marcables como "Leído" con persistencia reactiva.
-   - Chat por solicitud mediante `GET/POST /api/messages` con persistencia en `ChatMessage`, validación de participante (solicitante o dueño del item), control de estado y Realtime vía Supabase (ver `docs/chat.md`).
+   El paso `postinstall` genera el cliente de Prisma. Si modificas el esquema, vuelve a generarlo con `pnpm db:generate`.
 
----
+3. Aplica las migraciones existentes a la base de datos configurada:
 
-## 🛠️ Comandos Disponibles
+   ```bash
+   pnpm db:migrate:deploy
+   ```
 
-En el directorio del proyecto, puedes ejecutar:
+   Este comando modifica esa base de datos. Las migraciones incluyen tablas, permisos y configuración de Storage de Supabase. Un PostgreSQL independiente no sustituye los servicios de Supabase requeridos para autenticar usuarios y subir archivos.
+
+4. Configura en Supabase Auth la URL del sitio y las redirecciones de confirmación y recuperación para tu origen local (`http://localhost:5173`). Las pantallas de callback son `/auth/confirmacion` y `/auth/reset-password`.
+5. Inicia frontend y API:
+
+   ```bash
+   pnpm dev:full
+   ```
+
+Vite usa normalmente `http://localhost:5173`; la API escucha en `http://localhost:8787`. Vite redirige `/api` a ese servidor. Puedes cambiar el puerto del backend con `DEV_API_PORT`. `pnpm dev` inicia únicamente el frontend; `pnpm dev:api`, únicamente la API. No se necesita ejecutar `vercel dev` para desarrollo local.
+
+### Variables de entorno
+
+Consulta los ejemplos de formato en [`.env.example`](.env.example).
+
+| Variables | Uso |
+| --- | --- |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Cliente público de Supabase en el navegador. |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Cliente Supabase del backend. |
+| `DATABASE_URL` | Conexión PostgreSQL de la API; el ejemplo usa el pooler de Supabase. |
+| `DIRECT_URL` | Conexión para comandos de Prisma que acceden a la BD, incluidas migraciones. No es necesaria para generar el cliente. |
+| `APP_URL` | Origen de la aplicación para enlaces de autenticación. |
+| `VITE_API_BASE_URL` | Opcional si la API está en otro origen; dejar vacío con el proxy local o con Vercel en el mismo dominio. |
+| `SUPABASE_SECRET_KEY` | Placeholder opcional en `.env.example`; los handlers actuales no la utilizan. No es necesaria para el correo de recuperación. |
+| `UNSPLASH_ACCESS_KEY` | Opcional, para búsqueda de fotos de categorías desde el backend. |
+| `LENDIT_MOBILE_HOLDER`, `LENDIT_MOBILE_BANK`, `LENDIT_MOBILE_PHONE`, `LENDIT_MOBILE_NATIONAL_ID` | Datos de respaldo de la cuenta central de Pago Móvil; también puede configurarse desde `/admin/pagos`. |
+| `DEV_API_PORT` | Opcional, puerto de API local; por defecto `8787`. |
+
+Las variables `VITE_*` se incluyen en el navegador: no deben contener secretos. No versiones archivos `.env` con credenciales. El registro comunitario exige correo institucional; los antiguos flags de correos de prueba no habilitan excepciones a esa política.
+
+## Rutas principales
+
+| Área | Rutas |
+| --- | --- |
+| Públicas | `/`, `/catalogo`, `/como-funciona` (alias `/comofunciona`), `/categorias`, `/confianza` |
+| Autenticación | `/login`, `/register`, `/recuperar-contrasena`, `/auth/confirmacion`, `/auth/reset-password`, `/admin/login` |
+| Marketplace autenticado | `/inicio`, `/publicar`, `/mis-publicaciones`, `/solicitudes`, `/mensajes` |
+| Cuenta | `/cuenta/perfil`, `/cuenta/carnet`, `/cuenta/acreditacion`, `/cuenta/preferencias`, `/cuenta/seguridad`, `/cuenta/pagos` |
+| Administración | `/admin/roles`, `/admin/users`, `/admin/categories`, `/admin/careers`, `/admin/schools`, `/admin/verificaciones-docentes`, `/admin/pagos` |
+
+Las rutas protegidas comprueban sesión y permisos. Al intentar publicar o solicitar sin sesión, se conserva la ruta pendiente durante el acceso.
+
+## Roles y permisos
+
+Los roles son datos de las tablas `Role`, `Permission` y `RolePermission`. El panel `/admin/roles` permite gestionar roles y permisos con `roles.manage`. Otras secciones usan `users.manage`, `categories.manage`, `careers.manage`, `teachers.review` y `payments.manage` según corresponda.
+
+Los perfiles de estudiante y profesor participan en el marketplace según sus permisos y estado de verificación. Los perfiles administrativos tienen un flujo separado; no deben usarse como cuentas de préstamo para las pruebas funcionales.
+
+Para asignar un rol existente a un usuario que ya tiene perfil en la BD:
 
 ```bash
-# Instalar dependencias
-pnpm install
-
-# Servidor de desarrollo
-pnpm dev
-
-# Frontend + API local (server/dev-api.ts) juntos, sin depender de una cuenta de Vercel
-pnpm dev:full
-
-# Compilar el proyecto para producción (Type-check con vue-tsc + build)
-pnpm build
-
-# Previsualizar la versión compilada de producción locally
-pnpm preview
-
-# Ejecutar pruebas unitarias de Vitest
-pnpm test
-
-# Cambiar el rol de un usuario ya registrado
 pnpm db:promote admin@gmail.com ADMIN
 ```
 
-### Despliegue en Vercel
+El comando no crea la identidad en Supabase ni registra un perfil nuevo. Crea primero la identidad y su perfil correspondiente; después accede por `/admin/login`. Consulta [acceso administrativo](docs/admin-access.md).
 
-El proyecto incluye `vercel.json` para compilar Vite, servir `dist` y recargar rutas de Vue Router. Toda la API se despliega como una sola funci?n (`api/index.ts`), compatible con el l?mite de Hobby. Los handlers internos viven en `backend/` y el router compartido en `server/app.ts`; `server/dev-api.ts` solo inicia ese router en desarrollo. La reescritura `/api/:path*` conserva las rutas p?blicas y los par?metros; las rutas API desconocidas devuelven JSON 404. No colocar handlers ni pruebas adicionales dentro de `api/`, ya que Vercel puede contarlos como funciones independientes.
+## Comandos y verificación
 
-1. Importa el repositorio en Vercel usando la raíz del proyecto. El comando de build es `pnpm build`.
-2. Configura en Vercel, para Preview y Production, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL`, `DIRECT_URL` y `APP_URL`.
-3. Deja `VITE_API_BASE_URL` vacío o sin definir: en Vercel el frontend y las funciones API comparten el mismo dominio.
-4. Mantén `ALLOW_TEST_EMAILS` y `VITE_ALLOW_TEST_EMAILS` en `false`. El build puede ejecutar `prisma generate` sin `DIRECT_URL`; esta variable sí es obligatoria cuando ejecutes migraciones.
-5. Ejecuta una vez `pnpm db:migrate:deploy` usando las credenciales de la base de datos de producción antes de probar la API. La migración crea modalidad/precio, vínculo de pagos y el bucket/policies de `item-photos`.
-6. En Supabase Auth, establece la URL del sitio y las URLs de redirección con el dominio de Vercel o el dominio personalizado; `APP_URL` debe apuntar a ese mismo origen.
-7. Comprueba `/`, `/login`, `/register`, `/admin/login` y `/api/health` después del primer despliegue.
+| Comando | Propósito |
+| --- | --- |
+| `pnpm dev:full` | Frontend y API local en paralelo. |
+| `pnpm dev` / `pnpm dev:api` | Iniciar cada servidor por separado. |
+| `pnpm build` | Comprobar tipos de frontend/backend y compilar con Vite. |
+| `pnpm preview` | Previsualizar el frontend compilado; no inicia la API. |
+| `pnpm test` | Vitest en modo interactivo. |
+| `pnpm test --run` | Ejecutar las pruebas normales una vez. |
+| `pnpm test:api` | Integración HTTP con Supertest y PostgreSQL temporal. |
+| `pnpm test:last-admin` | Verificaciones adicionales de protección del último administrador. |
+| `pnpm docs:api` | Regenerar OpenAPI; el generador debe mantenerse alineado con el router. |
+| `pnpm db:generate` / `pnpm db:validate` | Generar el cliente o validar el esquema Prisma. |
+| `pnpm db:migrate` | Crear/aplicar migraciones durante desarrollo. |
+| `pnpm db:migrate:deploy` | Aplicar migraciones existentes al entorno configurado. |
+| `pnpm db:studio` | Explorar los datos con Prisma Studio. |
 
-Para comprobar el paquete serverless antes de publicarlo, ejecuta `vercel build --prod` y después `node scripts/qa-vercel-runtime.mjs`. Esta comprobación inicia el JavaScript emitido y verifica respuestas 401/404 sin conectar a servicios externos. Los imports del router compartido deben usar extensión `.js`: los imports `.ts` funcionan con `tsx` en desarrollo, pero fallan al arrancar el JavaScript compilado de Vercel. No publiques un build local con valores `[SENSITIVE]` descargados como placeholders; el despliegue remoto debe compilar con las variables reales configuradas en Vercel.
+`test:api` requiere los binarios de PostgreSQL (`initdb` y `pg_ctl`). En Windows busca PostgreSQL 18; puedes indicar otra instalación con `QA_POSTGRES_BIN`. Genera evidencias en `output/qa-api/`. No requiere iniciar los servidores ni conectarse a Supabase: simula el proveedor de identidad, pero usa handlers, Prisma y PostgreSQL reales. No verifica correo, contraseñas, RLS ni el despliegue. Consulta [pruebas de API](tests/api/README.md).
 
-### Roles y permisos
+## Despliegue en Vercel
 
-Los roles y permisos son datos, no un enum fijo: viven en las tablas `Role`, `Permission` y `RolePermission`. Un `ADMIN` puede crear roles nuevos y activar/desactivar permisos por rol desde el panel "Roles y permisos" que aparece en la landing al iniciar sesión como admin (requiere el permiso `roles.manage`).
+`vercel.json` ejecuta `pnpm build`, sirve `dist` y envía `/api/:path*` a **una única función**, [`api/index.ts`](api/index.ts). Esta recupera la ruta pública y delega en `server/app.ts`; los handlers viven en `backend/`. Las rutas API desconocidas devuelven JSON 404. No agregues handlers o pruebas dentro de `api/`, pues podrían convertirse en funciones adicionales.
 
-- **STUDENT** y **PROFESSOR** (elegido al registrarse): `profile.update`, `items.publish`, `items.rent`, `reviews.create`.
-- **ADMIN**: todos los permisos, incluyendo `roles.manage`, `categories.manage`, `careers.manage`, `users.manage`. Puede entrar desde `/admin/login` con un correo como Gmail.
-- Las publicaciones quedan **disponibles de inmediato** al publicarse — no hay cola de revisión.
-    - Al publicar un objeto se puede restringir su audiencia a uno o más roles (ej. "solo para profesores"); sin restricción, lo ve todo el campus.
-    - El pago de alquiler es **simulado** (`SIMULATED_PAID`); no se conecta todavía a una pasarela real.
-- Calificar a otro usuario (`reviews.create`) solo es posible después de que un préstamo (`Loan`) quede marcado como finalizado.
+1. Importa el repositorio usando la raíz del proyecto y una versión de Node compatible con las dependencias.
+2. Configura para cada entorno las variables de Supabase, `DATABASE_URL`, `DIRECT_URL` y `APP_URL`. Añade las variables opcionales de las funciones que utilices.
+3. Deja `VITE_API_BASE_URL` vacío si frontend y API comparten dominio.
+4. Aplica las migraciones pendientes con `pnpm db:migrate:deploy` usando la conexión del entorno correspondiente, antes de probar la nueva API.
+5. Configura en Supabase Auth el dominio y las URLs de redirección de confirmación y recuperación. `APP_URL` debe apuntar al mismo origen.
+6. Comprueba `/`, `/login`, `/register`, `/admin/login` y `/api/health`. El health check informa de la conexión a PostgreSQL, no del funcionamiento completo de Auth o Storage.
 
-Para probar con un admin: registra o crea su usuario en Supabase, asígnale el perfil correspondiente y ejecuta `pnpm db:promote admin@gmail.com ADMIN`. Luego entra desde `/admin/login`.
+Para comprobar un paquete serverless local, ejecuta `pnpm exec vercel build --prod` y después `node scripts/qa-vercel-runtime.mjs`, con la configuración de Vercel preparada. El segundo comando prueba el JavaScript emitido y respuestas 401/404 sin conectar a servicios externos. Los imports internos del servidor usan extensión `.js` para funcionar después de compilar. No publiques un build con placeholders `[SENSITIVE]` en lugar de las variables reales.
 
----
+Existe además un workflow de **GitHub Pages** en `.github/workflows/deploy.yml`, que usa `GH_PAGES=true` para servir el frontend bajo `/lendit-ujap/`. Pages solo aloja archivos estáticos: no ejecuta esta API. Un despliegue completo necesita también el backend y los servicios configurados.
 
-## 🔮 Próximos Avances
+## Documentación relacionada
 
-- **Unidad 6**: Integración de una pasarela real si el proyecto requiere cobros.
-- **Unidad 6**: Reputación, QR de un solo uso y moderación de objetos.
-- **Unidad 6**: Configuración formal de formateadores y linters (ESLint/Prettier) para estandarización de la calidad del código.
+- [Entrada de API](api/README.md), [servidor compartido](server/README.md) y [referencia HTTP](docs/api-reference.md).
+- [Contrato OpenAPI](contracts/openapi.json).
+- [Cuenta y preferencias](docs/account-settings.md) y [verificación docente](docs/teacher-verification-contract.md).
+- [Chat](docs/chat.md), [pagos simulados](docs/payments.md) e [imágenes de categorías](docs/category-images.md).
+- [Sistema de diseño](design-system/lendit-ujap/MASTER.md) y [créditos de imágenes](docs/image-credits.md).
+
+Los contratos y reportes describen su alcance y fecha; para resolver discrepancias, contrasta con `server/app.ts`, los handlers de `backend/`, `prisma/schema.prisma` y los scripts de `package.json`.
+
+## Pendiente
+
+- Integración y verificación de pagos bancarios reales, si el alcance del proyecto lo requiere.
+- Flujo completo de reputación/calificaciones, QR de un solo uso y moderación de artículos. Tener modelos o permisos definidos no equivale a disponer de esos flujos en la interfaz y la API.
+- Configuración formal de ESLint/Prettier.

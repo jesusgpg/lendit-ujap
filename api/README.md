@@ -1,128 +1,79 @@
-# Endpoints Serverless de la API (`api/`)
+# Entrada HTTP de la API (`api/`)
 
-Esta carpeta alberga los controladores serverless que exponen la API REST de LendIt UJAP. Se ejecutan como Vercel Serverless Functions en producción y bajo un servidor Express en desarrollo local (`npm run dev:api`).
+Esta carpeta contiene **una única función de Vercel**, [`index.ts`](index.ts). Los controladores están en [`backend/`](../backend/) y las rutas se registran en [`server/app.ts`](../server/app.ts). En desarrollo, `pnpm dev:api` inicia ese mismo router en el puerto 8787. No agregues otros handlers ni pruebas a `api/`.
 
----
+La reescritura `/api/:path*` de `vercel.json` delega en esta entrada con `__apiPath`; `index.ts` reconstruye la ruta y conserva los otros parámetros de consulta. Las rutas no registradas responden `404 API_NOT_FOUND` en JSON.
 
-## 1. Matriz de Endpoints y Permisos
+## Endpoints y acceso
 
-| Endpoint | Métodos | Permiso Requerido | Descripción Rápida |
-|---|---|---|---|
-| `/api/health` | `GET` | Ninguno (público) | Comprobación de salud de conexión a la base de datos PostgreSQL. |
-| `/api/items` | `GET` | Ninguno / Autenticado | Catálogo de artículos disponibles o solicitudes del usuario (`?view=requests`). |
-| `/api/items` | `POST` | `items.publish` | Publicación de un nuevo objeto para préstamo o alquiler. |
-| `/api/items` *(resource: request)* | `POST` | `items.rent` | Emisión de una solicitud de préstamo sobre un objeto. |
-| `/api/items` | `PATCH` | Dueño / `users.manage` | Actualización de datos de un objeto (título, descripción, foto, pausa). |
-| `/api/items` *(resource: request)* | `PATCH` | `items.rent` | Transiciones de estado de solicitudes (`approve`, `reject`, `cancel`, `return`). |
-| `/api/items` | `DELETE` | Dueño / `users.manage` | Eliminación de un artículo sin historial activo de préstamos. |
-| `/api/me` | `GET` | Autenticado | Obtención del perfil, rol y permisos del usuario autenticado. |
-| `/api/me` | `PATCH` | Autenticado / `profile.update` | Actualización o inicialización del perfil de usuario y foto. |
-| `/api/categories` | `GET` | Ninguno (público) | Lista de categorías disponibles. |
-| `/api/categories` | `POST` | `categories.manage` | Creación de una nueva categoría temática. |
-| `/api/categories/:key` | `PATCH`, `DELETE` | `categories.manage` | Modificación o eliminación de una categoría existente. |
-| `/api/careers` | `GET` | Ninguno (público) | Lista de carreras académicas y escuelas. |
-| `/api/careers` | `POST` | `careers.manage` | Registro de una nueva carrera universitaria. |
-| `/api/careers/:id` | `PATCH`, `DELETE` | `careers.manage` | Modificación o retiro de una carrera sin estudiantes asociados. |
-| `/api/schools` | `GET`, `POST` | `careers.manage` (POST) | Lista y registro de facultades/escuelas universitarias. |
-| `/api/roles` | `GET`, `POST` | Autenticado (GET) / `roles.manage` (POST) | Consulta de roles y creación de nuevos roles con permisos asignados. |
-| `/api/permissions` | `GET` | `roles.manage` | Catálogo maestro de permisos del sistema. |
-| `/api/users` | `GET` | `users.manage` | Directorio de usuarios para el panel de administración. |
+Las rutas que requieren sesión reciben `Authorization: Bearer <token de Supabase>`. Los handlers comprueban también perfil activo, permisos, propiedad, audiencia y estado del recurso cuando corresponde. Esta tabla resume el acceso; no sustituye esas validaciones.
 
----
+| Ruta pública | Métodos | Uso y acceso |
+| --- | --- | --- |
+| `/api/health` | GET | Público. Consulta PostgreSQL; 200 con `database: "up"` o 503 con `database: "down"`. |
+| `/api/items` | GET, POST, PATCH, DELETE | Catálogo, publicaciones y solicitudes; las mutaciones requieren sesión y las reglas de marketplace. `items.publish` para publicar, `items.rent` para solicitar. |
+| `/api/me` | GET, PATCH | Perfil propio, sincronización y actualización de datos según permisos. |
+| `/api/categories` | GET, POST | Consulta pública; gestión con `categories.manage`. |
+| `/api/categories/:key` | PATCH, DELETE | Gestión con `categories.manage`; no se elimina una categoría en uso. |
+| `/api/careers` | GET, POST | Consulta pública; gestión con `careers.manage`. |
+| `/api/careers/:id` | PATCH, DELETE | Gestión con `careers.manage`; se comprueban referencias antes de eliminar. |
+| `/api/schools` | GET, POST | Consulta pública; gestión con `careers.manage`. |
+| `/api/schools/:id` | PATCH, DELETE | Gestión con `careers.manage`. |
+| `/api/roles` | GET, POST | Consulta autenticada; creación con `roles.manage`. |
+| `/api/roles/:id` | PATCH, DELETE | Gestión de roles y permisos con `roles.manage`. |
+| `/api/permissions` | GET | Catálogo de permisos con `roles.manage`. |
+| `/api/users` | GET | Directorio con `users.manage`. |
+| `/api/users/:id` | PATCH | Rol/estado con `users.manage`; protección del último administrador y requisitos de acreditación docente. |
+| `/api/users/:id/reset-password` | POST | Solicitar correo de recuperación con `users.manage`; no confirma su entrega. |
+| `/api/messages` | GET, POST | Bandeja, consultas de artículos y mensajes entre participantes. Perfiles administrativos excluidos del chat de marketplace. |
+| `/api/notifications` | GET, PATCH | Notificaciones propias y marcado como leídas. |
+| `/api/payments` | GET, POST | Cuenta/wallet, pagos simulados y configuración central; reglas según vista y acción. |
+| `/api/teacher-verifications/me` | GET, POST | Consulta y envío de acreditación propia. |
+| `/api/teacher-verifications/me/credential` | GET | URL firmada temporal de credencial propia. |
+| `/api/admin/teacher-verifications` | GET | Bandeja de revisión con `teachers.review`. |
+| `/api/admin/teacher-verifications/:id` | GET | Expediente con `teachers.review`. |
+| `/api/admin/teacher-verifications/:id/decision` | POST | Dictamen con `teachers.review` y control de versión. |
 
-## 2. Especificación Técnica por Controlador
+## Convenciones de solicitudes
 
-### `items.ts` (`/api/items`)
-Controlador central que orquesta tanto la gestión de artículos como el punto de entrada para las mutaciones de solicitudes de préstamo.
+`GET /api/items?mine=1` (también `mine=true`) consulta publicaciones propias. `GET /api/items?view=requests` devuelve las solicitudes del usuario. Las solicitudes se crean en el mismo endpoint:
 
-#### Parámetros de Consulta (`req.query`)
-- `mine=1` o `mine=true`: Filtra exclusivamente los objetos cuyo dueño es el usuario autenticado (`ownerId === profile.id`), incluyendo artículos pausados.
-- `view=requests`: Desvía la respuesta hacia `listRequests()` para devolver las solicitudes entrantes y salientes del usuario.
-
-#### Ejemplos de Carga Útil (Payloads)
-
-##### Creación de Artículo (`POST /api/items`)
-```json
-{
-  "title": "Bata de Laboratorio Talla M",
-  "categoryKey": "herramientas",
-  "duration": "2 días",
-  "description": "Limpia y en perfecto estado, obligatoria para Química I.",
-  "photoUrl": "https://.../storage/v1/object/public/item-photos/usr123/foto.jpg",
-  "mode": "RENTAL",
-  "price": 2.50,
-  "currency": "USD",
-  "restrictedToRoles": ["STUDENT"]
-}
-```
-
-##### Creación de Solicitud (`POST /api/items`)
 ```json
 {
   "resource": "request",
-  "itemId": "8a7f9b2c-...",
-  "startsAt": "2026-10-30T08:00:00.000Z",
-  "endsAt": "2026-10-30T16:00:00.000Z",
-  "message": "¿Podemos vernos frente a la biblioteca?"
+  "itemId": "UUID_DEL_ARTICULO",
+  "startsAt": "2026-11-02T08:00:00.000Z",
+  "endsAt": "2026-11-02T16:00:00.000Z",
+  "message": "¿Podemos encontrarnos en la biblioteca?"
 }
 ```
 
-##### Acción sobre Solicitud (`PATCH /api/items`)
-```json
-{
-  "resource": "request",
-  "action": "approve",
-  "requestId": "5e1a2b3c-..."
-}
-```
+Sustituye los identificadores y usa fechas futuras válidas para el artículo. Para actuar sobre una solicitud se usa PATCH con `resource: "request"`, `requestId` y `action`: `approve`, `reject`, `cancel` o `return`. La acción permitida depende del participante y del estado; no basta con tener un permiso genérico.
 
----
+## Mensajes y notificaciones
 
-### `me.ts` (`/api/me`)
-Sincroniza y expone el perfil de usuario.
+- `GET /api/messages?view=inbox&page=0`: bandeja paginada.
+- POST con `action: "start"` e `itemId`: iniciar una consulta sobre un artículo.
+- GET o POST con `conversationId` o `requestId` (excluyentes): consultar o enviar mensajes; para enviar se añade `content`.
+- `GET /api/notifications`: notificaciones propias; PATCH admite las acciones `read` y `read-all` según el esquema de `backend/notifications.ts`.
 
-- **Sincronización Automática**: Si un usuario se autentica por primera vez y el trigger de base de datos no creó su fila (por ejemplo en migraciones tempranas), responderá con `409 PROFILE_REQUIRED`. El cliente enviará un `PATCH` vacío y `me.ts` creará automáticamente el registro en la tabla `User` asignando el rol `STUDENT` a partir de los metadatos seguros de Supabase Auth.
-- **Respuesta de Perfil (`GET`)**:
-```json
-{
-  "ok": true,
-  "user": {
-    "id": "usr_9988",
-    "name": "Ana Rodríguez",
-    "firstName": "Ana",
-    "lastName": "Rodríguez",
-    "email": "ana.rodriguez@ujap.edu.ve",
-    "career": "Ingeniería de Computación",
-    "careerId": "car_1234",
-    "phone": "04141234567",
-    "photo": "https://.../avatar.jpg",
-    "role": "STUDENT",
-    "permissions": ["items.publish", "items.rent", "profile.update"],
-    "emailVerifiedAt": "2026-09-20T10:00:00.000Z"
-  }
-}
-```
+Las conversaciones se unifican mediante `ItemConversation`; las solicitudes mantienen su contexto. Consulta [chat](../docs/chat.md) y los handlers para las restricciones y los cursores de paginación.
 
----
+## Pagos demostrativos
 
-### `categories.ts` (`/api/categories` y `/api/categories/:key`)
-- Valida que las claves se transformen a minúsculas y reemplacen espacios por guiones (`v.toLowerCase().replace(/\s+/g, '-')`).
-- `DELETE` comprueba que la categoría no tenga objetos vinculados (`itemsUsingCategory === 0`), devolviendo `409 CATEGORY_IN_USE` en caso contrario.
+`backend/payments.ts` admite estas operaciones:
 
----
+- GET con `view=account`: wallets, movimientos, tasas y cuenta central disponibles para el usuario.
+- GET con `requestId`: pago de una solicitud accesible.
+- POST con `action: "mobile-rental"`, `"wallet-top-up"` o `"wallet-rental"`: pago o recarga simulados. Consulta los esquemas del handler para los campos obligatorios.
+- GET con `view=admin-settings` y POST con `action: "save-central-account"`: configuración de cuenta central con `payments.manage`.
 
-### `careers.ts` (`/api/careers` y `/api/careers/:id`)
-- Permite vincular una carrera a una facultad (`schoolId`).
-- `DELETE` valida que no existan usuarios inscritos en la carrera (`prisma.user.count({ where: { careerId: id } })`), previniendo errores de integridad referencial.
+El éxito se registra como `SIMULATED_PAID`. El comprobante, referencia y tasa BCV no constituyen una validación bancaria ni implican un cobro real.
 
----
+## Referencias y verificación
 
-### `roles.ts` (`/api/roles`)
-- Normaliza nombres de roles en mayúsculas con guiones bajos (ej. `PREFECTO_AULA`).
-- Permite asociar una lista de claves de permisos (`permissionKeys: string[]`) que se traducen en inserciones en `RolePermission`.
+- [Servidor compartido](../server/README.md) y [preparación del proyecto](../README.md).
+- [Referencia HTTP](../docs/api-reference.md), [OpenAPI](../contracts/openapi.json), [pagos](../docs/payments.md) y [acreditación docente](../docs/teacher-verification-contract.md).
+- [Pruebas de integración](../tests/api/README.md), ejecutables con `pnpm test:api`.
 
----
-
-### `health.ts` (`/api/health`)
-- Ejecuta `prisma.$queryRaw\`SELECT 1\``.
-- Devuelve HTTP 200 `{ ok: true, database: "up" }` o HTTP 503 `{ ok: false, database: "down" }`.
+La referencia y el generador OpenAPI pueden quedar rezagados frente a handlers nuevos: verifica su cobertura antes de usarlos como contrato completo. El inventario ejecutable es `server/app.ts`; los métodos y esquemas los define cada handler de `backend/`. La autenticación y el almacenamiento utilizan Supabase; no existen endpoints locales `/api/login` o `/api/register`.
